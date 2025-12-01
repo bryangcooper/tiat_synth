@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Full Synth Panel — Single File</title>
+
+<!-- Tone.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+<style>
+  /* Basic app look */
+  html,body { height:100%; margin:0; background:#000; color:#eee; font-family: Inter, Arial, sans-serif; overflow:hidden; }
+  #wrapper { position:relative; width:100vw; height:100vh; }
+  .top-bar { position:absolute; top:0; left:0; right:0; height:56px; display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:rgba(255,255,255,0.03); z-index:50; }
+  .title { font-size:14px; color:rgba(255,255,255,0.8); text-align:center; width:100%; position:absolute; left:0; right:0; margin:auto; pointer-events:none; }
+  .controls { display:flex; gap:10px; align-items:center; z-index:60; }
+
+  #start-wrapper { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:100; background:linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.8)); flex-direction:column; }
+  #start-button { background:#4caf50; border:none; color:white; padding:12px 18px; border-radius:8px; font-size:16px; cursor:pointer; }
+  #meta { margin-top:12px; color:#ccc; max-width:640px; text-align:center; line-height:1.4; }
+
+  /* Right-side big panel */
+  #panel { position:absolute; right:16px; top:72px; width:360px; bottom:16px; overflow:auto; padding:14px; border-radius:10px; background:rgba(0,0,0,0.6); box-shadow:0 8px 30px rgba(0,0,0,0.6); z-index:70; }
+  h3 { margin:0 0 10px 0; font-size:13px; color:#ddd; }
+  .section { margin-bottom:18px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .row { display:flex; align-items:center; gap:8px; margin:8px 0; }
+  label { font-size:12px; color:#bfbfbf; width:120px; }
+  input[type=range] { flex:1; }
+  select, input[type=number] { background:#111; border:1px solid rgba(255,255,255,0.06); color:#eee; padding:6px 8px; border-radius:6px; }
+  .small { width:78px; }
+
+  /* Bottom-left active notes */
+  #active-notes { position:absolute; left:16px; bottom:16px; display:flex; gap:6px; flex-wrap:wrap; z-index:60; }
+  .note-bubble { background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.25); padding:6px 8px; border-radius:6px; font-weight:600; color:#cfeecf; font-size:13px; }
+
+  /* Keyboard helper */
+  #keyboard-helper { position:absolute; right:400px; top:72px; background:rgba(0,0,0,0.65); padding:12px; border-radius:8px; z-index:70; width:500px; }
+  .hint { font-size:12px; color:#bdbdbd; }
+  
+  /* Stored notes display */
+  #stored-notes { position:absolute; left:16px; top:72px; background:rgba(0,0,0,0.65); padding:12px; border-radius:8px; z-index:70; min-width:200px; max-width:300px; }
+  .stored-note { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.3); padding:4px 6px; border-radius:4px; font-size:11px; color:#cfeecf; margin:2px; display:inline-block; }
+  .stored-notes-empty { color:#888; font-size:11px; font-style:italic; }
+  
+  /* Piano keyboard styles */
+  .piano-keyboard { display:flex; position:relative; height:80px; margin:8px 0; padding:0; }
+  .white-key { flex:1; background:linear-gradient(to bottom, #fff 0%, #f5f5f5 100%); border:1px solid #ccc; border-radius:0 0 4px 4px; position:relative; margin:0; min-width:0; box-shadow:inset 0 -2px 4px rgba(0,0,0,0.1); transition:background 0.1s ease; }
+  .white-key.pressed { background:linear-gradient(to bottom, #999 0%, #777 100%); border-color:#666; }
+  .black-key { position:absolute; width:14px; height:50px; background:linear-gradient(to bottom, #333 0%, #000 100%); border:1px solid #000; border-radius:0 0 3px 3px; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5); margin-left:-7px; transition:background 0.1s ease; }
+  .black-key.pressed { background:linear-gradient(to bottom, #555 0%, #333 100%); border-color:#444; }
+  .key-label { position:absolute; bottom:8px; left:0; right:0; text-align:center; font-size:11px; font-weight:bold; color:#333; text-shadow:0 1px 1px rgba(255,255,255,0.8); }
+  .black-key .key-label { color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.8); font-size:9px; bottom:6px; }
+  .note-label { position:absolute; top:6px; left:0; right:0; text-align:center; font-size:9px; color:#666; font-weight:normal; }
+  .black-key .note-label { color:#aaa; font-size:7px; top:4px; }
+  .keyboard-section { margin-bottom:14px; }
+  .keyboard-title { font-size:11px; color:#ddd; margin-bottom:6px; font-weight:bold; }
+
+  /* EQ Visualizer */
+  #eq-visualizer { position:absolute; left:16px; top:72px; width:300px; background:rgba(0,0,0,0.65); padding:12px; border-radius:8px; z-index:70; }
+  #eq-canvas { width:100%; height:120px; background:rgba(0,0,0,0.3); border-radius:4px; display:block; }
+  .eq-label { font-size:10px; color:#888; margin-top:4px; display:flex; justify-content:space-between; }
+
+  /* Responsive */
+  @media (max-width:900px) {
+    #panel { width:320px; right:8px; top:80px; bottom:8px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrapper">
+
+  <div class="top-bar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="back" class="back-button" style="background:#222;color:#fff;border-radius:6px;padding:6px 10px;border:none;cursor:pointer">← Back</button>
+    </div>
+    <div class="title">Polyphonic Synth — Full Parameter Panel</div>
+    <div class="controls">
+      <span class="hint">Input:</span>
+      <select id="input-select" style="background:#111;color:#fff;padding:8px;border-radius:6px;">
+        <option value="keyboard">Keyboard</option>
+        <option value="midi">MIDI</option>
+      </select>
+
+      <span class="hint">Output:</span>
+      <select id="output-select" style="background:#111;color:#fff;padding:8px;border-radius:6px;">
+        <option value="tonejs">Tone.js</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="start-wrapper">
+    <button id="start-button">Start</button>
+    <div id="meta">
+      Click Start to enable audio. Play with QWERTY (Q..I row, Z..M row) or use a MIDI keyboard.  
+      This single file exposes oscillator, filter, LFO, effects, portamento, pan, polyphony, and more.
+    </div>
+  </div>
+
+  <div id="panel">
+    <!-- Presets -->
+    <div class="section" style="border-bottom:2px solid rgba(255,255,255,0.1);">
+      <h3>Presets</h3>
+      <div class="row">
+        <label>Instrument</label>
+        <select id="preset-select" style="flex:1;">
+          <option value="default">Default</option>
+          <option value="piano">Piano</option>
+          <option value="grand-piano">Grand Piano</option>
+          <option value="electric-piano">Electric Piano</option>
+          <option value="wurlitzer">Wurlitzer</option>
+          <option value="rhodes">Rhodes</option>
+          <option value="acoustic-guitar">Acoustic Guitar</option>
+          <option value="electric-guitar">Electric Guitar</option>
+          <option value="voice">Voice/Vocal</option>
+          <option value="synth-pad">Synth Pad</option>
+          <option value="synth-lead">Synth Lead</option>
+          <option value="synth-bass">Synth Bass</option>
+          <option value="brass">Brass</option>
+          <option value="strings">Strings</option>
+          <option value="organ">Organ</option>
+          <option value="bell">Bell</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- OSC -->
+    <div class="section">
+      <h3>Oscillator / Pitch</h3>
+      <div class="row">
+        <label>Waveform</label>
+        <select id="osc-wave">
+          <option value="sine">sine</option>
+          <option value="square">square</option>
+          <option value="triangle">triangle</option>
+          <option value="sawtooth">sawtooth</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Detune (cents)</label>
+        <input id="detune" type="range" min="-1200" max="1200" step="1" value="0">
+        <div style="width:52px;text-align:right;color:#bdbdbd" id="detune-val">0</div>
+      </div>
+
+      <div class="row">
+        <label>Portamento (s)</label>
+        <input id="portamento" type="range" min="0" max="1" step="0.01" value="0">
+        <div style="width:52px;text-align:right;color:#bdbdbd" id="port-val">0.00</div>
+      </div>
+
+      <div class="row">
+        <label>Polyphony</label>
+        <select id="polyphony">
+          <option>4</option><option selected>8</option><option>12</option><option>16</option><option>32</option>
+        </select>
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="voice-count-label">8</div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="section">
+      <h3>Filter</h3>
+
+      <div class="row">
+        <label>Type</label>
+        <select id="filter-type">
+          <option value="lowpass">lowpass</option>
+          <option value="highpass">highpass</option>
+          <option value="bandpass">bandpass</option>
+          <option value="notch">notch</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Cutoff (Hz)</label>
+        <input id="filter-cutoff" type="range" min="50" max="12000" step="1" value="2000">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="cutoff-val">2000</div>
+      </div>
+
+      <div class="row">
+        <label>Resonance (Q)</label>
+        <input id="filter-q" type="range" min="0.1" max="20" step="0.1" value="1">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="q-val">1.0</div>
+      </div>
+
+      <div class="row">
+        <label>Filter Gain (dB)</label>
+        <input id="filter-gain" type="range" min="-24" max="24" step="0.5" value="0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="f-gain-val">0</div>
+      </div>
+
+      <div style="margin-top:8px;font-size:12px;color:#bfbfbf">Filter Envelope</div>
+
+      <div class="row" style="margin-top:6px">
+        <label>Env Amount (Hz)</label>
+        <input id="filter-env-amount" type="range" min="0" max="6000" step="1" value="800">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="fenv-amt-val">800</div>
+      </div>
+
+      <div class="row">
+        <label>Env Attack</label>
+        <input id="fenv-attack" type="range" min="0.001" max="1.5" step="0.001" value="0.01">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="fenv-a-val">0.010</div>
+      </div>
+
+      <div class="row">
+        <label>Env Decay</label>
+        <input id="fenv-decay" type="range" min="0.001" max="2.5" step="0.001" value="0.12">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="fenv-d-val">0.120</div>
+      </div>
+
+      <div class="row">
+        <label>Env Sustain</label>
+        <input id="fenv-sustain" type="range" min="0" max="1" step="0.01" value="0.0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="fenv-s-val">0.00</div>
+      </div>
+
+      <div class="row">
+        <label>Env Release</label>
+        <input id="fenv-release" type="range" min="0.01" max="5" step="0.01" value="0.6">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="fenv-r-val">0.60</div>
+      </div>
+    </div>
+
+    <!-- LFO -->
+    <div class="section">
+      <h3>LFO</h3>
+
+      <div class="row">
+        <label>Wave</label>
+        <select id="lfo-wave">
+          <option value="sine">sine</option>
+          <option value="triangle">triangle</option>
+          <option value="square">square</option>
+          <option value="sawtooth">sawtooth</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Rate (Hz)</label>
+        <input id="lfo-rate" type="range" min="0.01" max="20" step="0.01" value="5">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="lfo-rate-val">5.00</div>
+      </div>
+
+      <div class="row">
+        <label>Depth (Hz)</label>
+        <input id="lfo-depth" type="range" min="0" max="3000" step="1" value="0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="lfo-depth-val">0</div>
+      </div>
+
+      <div class="row">
+        <label>Target</label>
+        <select id="lfo-target">
+          <option value="filter">filter.frequency</option>
+          <option value="pitch">pitch (global detune)</option>
+          <option value="pan">panning</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Effects -->
+    <div class="section">
+      <h3>Effects</h3>
+
+      <div class="row">
+        <label>Reverb Wet</label>
+        <input id="reverb-wet" type="range" min="0" max="1" step="0.01" value="0.12">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="reverb-val">0.12</div>
+      </div>
+
+      <div class="row">
+        <label>Delay Time (s)</label>
+        <input id="delay-time" type="range" min="0" max="1.5" step="0.001" value="0.25">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="delay-time-val">0.25</div>
+      </div>
+
+      <div class="row">
+        <label>Delay Feedback</label>
+        <input id="delay-fb" type="range" min="0" max="0.95" step="0.01" value="0.24">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="delay-fb-val">0.24</div>
+      </div>
+
+      <div class="row">
+        <label>Chorus Wet</label>
+        <input id="chorus-wet" type="range" min="0" max="1" step="0.01" value="0.15">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="chorus-val">0.15</div>
+      </div>
+
+      <div class="row">
+        <label>Distortion</label>
+        <input id="dist-amt" type="range" min="0" max="1" step="0.01" value="0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="dist-val">0</div>
+      </div>
+    </div>
+
+    <!-- Global -->
+    <div class="section">
+      <h3>Global</h3>
+
+      <div class="row">
+        <label>Master Volume (dB)</label>
+        <input id="master-volume" type="range" min="-60" max="6" step="0.5" value="-12">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="master-val">-12</div>
+      </div>
+
+      <div class="row">
+        <label>Pan</label>
+        <input id="pan" type="range" min="-1" max="1" step="0.01" value="0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="pan-val">0.00</div>
+      </div>
+
+      <div class="row">
+        <label>Transpose (semitones)</label>
+        <input id="transpose" type="range" min="-24" max="24" step="1" value="0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="transpose-val">0</div>
+      </div>
+
+      <div class="row">
+        <label>Octave</label>
+        <input id="octave" type="range" min="-3" max="3" step="1" value="0">
+        <div style="width:60px;text-align:right;color:#bdbdbd" id="octave-val">0</div>
+        <div style="font-size:11px;color:#888;margin-left:4px">(- / +)</div>
+      </div>
+
+    </div>
+
+  </div> <!-- panel -->
+
+  <div id="eq-visualizer">
+    <div class="hint"><strong>Frequency Spectrum</strong></div>
+    <canvas id="eq-canvas" width="276" height="120"></canvas>
+    <div class="eq-label">
+      <span>20Hz</span>
+      <span>200Hz</span>
+      <span>2kHz</span>
+      <span>20kHz</span>
+    </div>
+  </div>
+
+  <div id="keyboard-helper" style="display:block;">
+    <div class="hint"><strong>Keyboard mapping</strong></div>
+    
+    <!-- Upper Octave Keyboard (C4-C5) -->
+    <div class="keyboard-section">
+      <div class="keyboard-title">Upper octave (C4-C5)</div>
+      <div class="piano-keyboard" id="upper-keyboard">
+        <!-- C4 -->
+        <div class="white-key" data-key="0" data-midi="60">
+          <div class="key-label">Q</div>
+          <div class="note-label">C4</div>
+        </div>
+        <!-- D4 -->
+        <div class="white-key" data-key="1" data-midi="62">
+          <div class="key-label">W</div>
+          <div class="note-label">D4</div>
+        </div>
+        <!-- E4 -->
+        <div class="white-key" data-key="2" data-midi="64">
+          <div class="key-label">E</div>
+          <div class="note-label">E4</div>
+        </div>
+        <!-- F4 -->
+        <div class="white-key" data-key="3" data-midi="65">
+          <div class="key-label">R</div>
+          <div class="note-label">F4</div>
+        </div>
+        <!-- G4 -->
+        <div class="white-key" data-key="4" data-midi="67">
+          <div class="key-label">T</div>
+          <div class="note-label">G4</div>
+        </div>
+        <!-- A4 -->
+        <div class="white-key" data-key="5" data-midi="69">
+          <div class="key-label">Y</div>
+          <div class="note-label">A4</div>
+        </div>
+        <!-- B4 -->
+        <div class="white-key" data-key="6" data-midi="71">
+          <div class="key-label">U</div>
+          <div class="note-label">B4</div>
+        </div>
+        <!-- C5 -->
+        <div class="white-key" data-key="7" data-midi="72">
+          <div class="key-label">I</div>
+          <div class="note-label">C5</div>
+        </div>
+        <!-- Black keys positioned between white keys -->
+        <!-- C#4 between C and D -->
+        <div class="black-key" data-black="0" data-midi="61">
+          <div class="key-label">2</div>
+          <div class="note-label">C#4</div>
+        </div>
+        <!-- D#4 between D and E -->
+        <div class="black-key" data-black="1" data-midi="63">
+          <div class="key-label">3</div>
+          <div class="note-label">D#4</div>
+        </div>
+        <!-- F#4 between F and G -->
+        <div class="black-key" data-black="2" data-midi="66">
+          <div class="key-label">5</div>
+          <div class="note-label">F#4</div>
+        </div>
+        <!-- G#4 between G and A -->
+        <div class="black-key" data-black="3" data-midi="68">
+          <div class="key-label">6</div>
+          <div class="note-label">G#4</div>
+        </div>
+        <!-- A#4 between A and B -->
+        <div class="black-key" data-black="4" data-midi="70">
+          <div class="key-label">7</div>
+          <div class="note-label">A#4</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lower Octave Keyboard (C3-C4) -->
+    <div class="keyboard-section">
+      <div class="keyboard-title">Lower octave (C3-C4)</div>
+      <div class="piano-keyboard" id="lower-keyboard">
+        <!-- C3 -->
+        <div class="white-key" data-key="0" data-midi="48">
+          <div class="key-label">Z</div>
+          <div class="note-label">C3</div>
+        </div>
+        <!-- D3 -->
+        <div class="white-key" data-key="1" data-midi="50">
+          <div class="key-label">X</div>
+          <div class="note-label">D3</div>
+        </div>
+        <!-- E3 -->
+        <div class="white-key" data-key="2" data-midi="52">
+          <div class="key-label">C</div>
+          <div class="note-label">E3</div>
+        </div>
+        <!-- F3 -->
+        <div class="white-key" data-key="3" data-midi="53">
+          <div class="key-label">V</div>
+          <div class="note-label">F3</div>
+        </div>
+        <!-- G3 -->
+        <div class="white-key" data-key="4" data-midi="55">
+          <div class="key-label">B</div>
+          <div class="note-label">G3</div>
+        </div>
+        <!-- A3 -->
+        <div class="white-key" data-key="5" data-midi="57">
+          <div class="key-label">N</div>
+          <div class="note-label">A3</div>
+        </div>
+        <!-- B3 -->
+        <div class="white-key" data-key="6" data-midi="59">
+          <div class="key-label">M</div>
+          <div class="note-label">B3</div>
+        </div>
+        <!-- C4 -->
+        <div class="white-key" data-key="7" data-midi="60">
+          <div class="key-label">,</div>
+          <div class="note-label">C4</div>
+        </div>
+        <!-- Black keys positioned between white keys -->
+        <!-- C#3 between C and D -->
+        <div class="black-key" data-black="0" data-midi="49">
+          <div class="key-label">S</div>
+          <div class="note-label">C#3</div>
+        </div>
+        <!-- D#3 between D and E -->
+        <div class="black-key" data-black="1" data-midi="51">
+          <div class="key-label">D</div>
+          <div class="note-label">D#3</div>
+        </div>
+        <!-- F#3 between F and G -->
+        <div class="black-key" data-black="2" data-midi="54">
+          <div class="key-label">G</div>
+          <div class="note-label">F#3</div>
+        </div>
+        <!-- G#3 between G and A -->
+        <div class="black-key" data-black="3" data-midi="56">
+          <div class="key-label">H</div>
+          <div class="note-label">G#3</div>
+        </div>
+        <!-- A#3 between A and B -->
+        <div class="black-key" data-black="4" data-midi="58">
+          <div class="key-label">J</div>
+          <div class="note-label">A#3</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);color:#888;font-size:10px;text-align:center">
+      <strong style="color:#aaa">- / +</strong> = change octave (current: <span id="octave-display" style="color:#4caf50;font-weight:bold">0</span>)
+    </div>
+  </div>
+
+  <div id="active-notes"></div>
+
+  <div id="stored-notes">
+    <div class="hint"><strong>Stored Notes</strong> <span style="font-size:10px;color:#888">(Press / to record, Space to play)</span></div>
+    <div id="stored-notes-list" style="margin-top:8px;min-height:20px;">
+      <div class="stored-notes-empty">No notes stored</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================
+   Full synth wiring (single file)
+   ============================ */
+
+let initialized = false;
+
+// Core Tone nodes
+let polySynth = null;
+let masterVol, masterPan;
+let globalFilter;
+let filterEnv; // envelope that modulates filter frequency
+let lfo;
+let reverb, delay, chorus, distortion;
+let effectsChainOut; // final node before master
+let analyser; // for EQ visualization
+
+// Config state (keeps in sync with UI)
+const state = {
+  osc: { type: 'sine', detune: 0 },
+  portamento: 0,
+  polyphony: 8,
+  filter: { type: 'lowpass', cutoff: 2000, q: 1, gain: 0 },
+  filterEnv: { amount: 800, attack: 0.01, decay: 0.12, sustain: 0.0, release: 0.6 },
+  lfo: { wave: 'sine', rate: 5, depth: 0, target: 'filter' },
+  effects: { reverbWet: 0.12, delayTime: 0.25, delayFB: 0.24, chorusWet: 0.15, dist: 0 },
+  global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+};
+
+// Presets configuration
+const presets = {
+  'default': {
+    osc: { type: 'sine', detune: 0 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 2000, q: 1, gain: 0 },
+    filterEnv: { amount: 800, attack: 0.01, decay: 0.12, sustain: 0.0, release: 0.6 },
+    lfo: { wave: 'sine', rate: 5, depth: 0, target: 'filter' },
+    effects: { reverbWet: 0.12, delayTime: 0.25, delayFB: 0.24, chorusWet: 0.15, dist: 0 },
+    global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+  },
+  'piano': {
+    osc: { type: 'sawtooth', detune: 8 },
+    portamento: 0,
+    polyphony: 16,
+    filter: { type: 'lowpass', cutoff: 2500, q: 1.5, gain: 0 },
+    filterEnv: { amount: 4000, attack: 0.001, decay: 0.4, sustain: 0.05, release: 1.2 },
+    lfo: { wave: 'sine', rate: 0.1, depth: 0, target: 'filter' },
+    effects: { reverbWet: 0.3, delayTime: 0.1, delayFB: 0.1, chorusWet: 0.15, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'grand-piano': {
+    osc: { type: 'sawtooth', detune: 12 },
+    portamento: 0,
+    polyphony: 16,
+    filter: { type: 'lowpass', cutoff: 3000, q: 2, gain: 1 },
+    filterEnv: { amount: 5000, attack: 0.001, decay: 0.5, sustain: 0.08, release: 1.5 },
+    lfo: { wave: 'sine', rate: 0.08, depth: 15, target: 'pitch' },
+    effects: { reverbWet: 0.4, delayTime: 0.08, delayFB: 0.08, chorusWet: 0.2, dist: 0 },
+    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
+  },
+  'electric-piano': {
+    osc: { type: 'sawtooth', detune: 10 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 2200, q: 2, gain: 0 },
+    filterEnv: { amount: 2500, attack: 0.002, decay: 0.25, sustain: 0.4, release: 0.6 },
+    lfo: { wave: 'sine', rate: 4.5, depth: 250, target: 'filter' },
+    effects: { reverbWet: 0.25, delayTime: 0.18, delayFB: 0.18, chorusWet: 0.4, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'wurlitzer': {
+    osc: { type: 'sawtooth', detune: 15 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 2400, q: 3, gain: 2 },
+    filterEnv: { amount: 3000, attack: 0.001, decay: 0.2, sustain: 0.5, release: 0.5 },
+    lfo: { wave: 'sine', rate: 5.5, depth: 300, target: 'filter' },
+    effects: { reverbWet: 0.2, delayTime: 0.15, delayFB: 0.15, chorusWet: 0.3, dist: 0.15 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'rhodes': {
+    osc: { type: 'sawtooth', detune: 12 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 2600, q: 2.5, gain: 0 },
+    filterEnv: { amount: 3500, attack: 0.001, decay: 0.3, sustain: 0.45, release: 0.7 },
+    lfo: { wave: 'sine', rate: 6, depth: 350, target: 'filter' },
+    effects: { reverbWet: 0.25, delayTime: 0.2, delayFB: 0.18, chorusWet: 0.45, dist: 0.08 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'acoustic-guitar': {
+    osc: { type: 'sawtooth', detune: 5 },
+    portamento: 0,
+    polyphony: 6,
+    filter: { type: 'lowpass', cutoff: 4500, q: 1.8, gain: 0 },
+    filterEnv: { amount: 5000, attack: 0.001, decay: 0.6, sustain: 0.15, release: 1.5 },
+    lfo: { wave: 'sine', rate: 0.3, depth: 0, target: 'filter' },
+    effects: { reverbWet: 0.35, delayTime: 0.25, delayFB: 0.2, chorusWet: 0.2, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0 }
+  },
+  'electric-guitar': {
+    osc: { type: 'sawtooth', detune: 0 },
+    portamento: 0,
+    polyphony: 6,
+    filter: { type: 'lowpass', cutoff: 3500, q: 4, gain: 0 },
+    filterEnv: { amount: 4000, attack: 0.005, decay: 0.4, sustain: 0.5, release: 0.6 },
+    lfo: { wave: 'sine', rate: 7, depth: 300, target: 'filter' },
+    effects: { reverbWet: 0.25, delayTime: 0.3, delayFB: 0.35, chorusWet: 0.25, dist: 0.5 },
+    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
+  },
+  'voice': {
+    osc: { type: 'sawtooth', detune: 3 },
+    portamento: 0.15,
+    polyphony: 4,
+    filter: { type: 'bandpass', cutoff: 1800, q: 5, gain: 0 },
+    filterEnv: { amount: 2000, attack: 0.08, decay: 0.3, sustain: 0.6, release: 0.5 },
+    lfo: { wave: 'sine', rate: 5, depth: 80, target: 'pitch' },
+    effects: { reverbWet: 0.45, delayTime: 0.15, delayFB: 0.15, chorusWet: 0.35, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'synth-pad': {
+    osc: { type: 'sawtooth', detune: 10 },
+    portamento: 0.4,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 1800, q: 1.2, gain: 0 },
+    filterEnv: { amount: 2000, attack: 0.8, decay: 1.0, sustain: 0.75, release: 2.0 },
+    lfo: { wave: 'sine', rate: 0.8, depth: 400, target: 'filter' },
+    effects: { reverbWet: 0.6, delayTime: 0.5, delayFB: 0.35, chorusWet: 0.5, dist: 0 },
+    global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+  },
+  'synth-lead': {
+    osc: { type: 'sawtooth', detune: 0 },
+    portamento: 0.2,
+    polyphony: 1,
+    filter: { type: 'lowpass', cutoff: 4000, q: 5, gain: 0 },
+    filterEnv: { amount: 5000, attack: 0.005, decay: 0.4, sustain: 0.4, release: 0.5 },
+    lfo: { wave: 'square', rate: 10, depth: 500, target: 'filter' },
+    effects: { reverbWet: 0.2, delayTime: 0.25, delayFB: 0.3, chorusWet: 0.25, dist: 0.25 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'synth-bass': {
+    osc: { type: 'square', detune: 0 },
+    portamento: 0.08,
+    polyphony: 1,
+    filter: { type: 'lowpass', cutoff: 600, q: 6, gain: 0 },
+    filterEnv: { amount: 3000, attack: 0.001, decay: 0.25, sustain: 0.6, release: 0.4 },
+    lfo: { wave: 'sine', rate: 1.5, depth: 150, target: 'filter' },
+    effects: { reverbWet: 0.12, delayTime: 0.12, delayFB: 0.15, chorusWet: 0, dist: 0.35 },
+    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
+  },
+  'brass': {
+    osc: { type: 'sawtooth', detune: 8 },
+    portamento: 0,
+    polyphony: 4,
+    filter: { type: 'lowpass', cutoff: 2800, q: 4, gain: 2 },
+    filterEnv: { amount: 3500, attack: 0.15, decay: 0.4, sustain: 0.7, release: 0.6 },
+    lfo: { wave: 'sine', rate: 4, depth: 200, target: 'filter' },
+    effects: { reverbWet: 0.35, delayTime: 0.18, delayFB: 0.15, chorusWet: 0.3, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'strings': {
+    osc: { type: 'sawtooth', detune: 6 },
+    portamento: 0.25,
+    polyphony: 12,
+    filter: { type: 'lowpass', cutoff: 3500, q: 2.5, gain: 0 },
+    filterEnv: { amount: 2500, attack: 0.4, decay: 0.6, sustain: 0.7, release: 1.2 },
+    lfo: { wave: 'sine', rate: 1.5, depth: 250, target: 'filter' },
+    effects: { reverbWet: 0.5, delayTime: 0.4, delayFB: 0.3, chorusWet: 0.4, dist: 0 },
+    global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+  },
+  'organ': {
+    osc: { type: 'square', detune: 0 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 7000, q: 0.8, gain: 0 },
+    filterEnv: { amount: 0, attack: 0.001, decay: 0.001, sustain: 1.0, release: 0.4 },
+    lfo: { wave: 'sine', rate: 6, depth: 400, target: 'filter' },
+    effects: { reverbWet: 0.45, delayTime: 0.35, delayFB: 0.25, chorusWet: 0.35, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'bell': {
+    osc: { type: 'sine', detune: 0 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'bandpass', cutoff: 5000, q: 10, gain: 0 },
+    filterEnv: { amount: 3000, attack: 0.001, decay: 0.05, sustain: 0.0, release: 2.5 },
+    lfo: { wave: 'sine', rate: 0.3, depth: 0, target: 'filter' },
+    effects: { reverbWet: 0.55, delayTime: 0.15, delayFB: 0.1, chorusWet: 0.12, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0 }
+  }
+};
+
+// Active notes display
+const activeNotes = new Map();
+// Track original MIDI notes (before transpose/octave) for proper cleanup
+const activeMidiNotes = new Set();
+// Stored notes for playback
+let storedNotes = [];
+// Track notes currently playing from stored notes (for spacebar sustain)
+let storedNotesPlaying = new Set();
+
+// keyboard mapping
+const keyboardLayout = {
+  'z': 48, 'x': 50, 'c': 52, 'v': 53, 'b': 55, 'n': 57, 'm': 59, ',': 60,
+  's': 49, 'd': 51, 'g': 54, 'h': 56, 'j': 58,
+  'q': 60, 'w': 62, 'e': 64, 'r': 65, 't': 67, 'y': 69, 'u': 71, 'i': 72,
+  '2': 61, '3': 63, '5': 66, '6': 68, '7': 70
+};
+let keysPressed = new Set();
+
+// ---------- initialization & setup ----------
+document.getElementById('start-button').addEventListener('click', async () => {
+  if (initialized) return;
+  // Set ultra-low latency mode for interactive performance
+  Tone.context.latencyHint = 'interactive';
+  Tone.context.lookAhead = 0; // Zero lookahead for absolute minimum latency
+  // Try to reduce buffer size for lower latency (if supported)
+  try {
+    const ctx = Tone.context.rawContext;
+    if (ctx) {
+      // Request smaller buffer size for lower latency
+      if (ctx.createScriptProcessor) {
+        ctx.destination.channelCountMode = 'explicit';
+      }
+      // Try to set a smaller buffer size (browser dependent)
+      if (ctx.baseLatency !== undefined) {
+        // Some browsers allow buffer size control
+        console.log('Audio context base latency:', ctx.baseLatency);
+      }
+    }
+  } catch (e) {
+    console.log('Buffer optimization not available:', e);
+  }
+  await Tone.start();
+  // Pre-warm the audio context by triggering a silent note
+  try {
+    const warmup = new Tone.Oscillator(440, 'sine').toDestination();
+    warmup.start();
+    warmup.stop(0.001);
+    warmup.dispose();
+  } catch (e) {}
+  await initSynthAudio();
+  document.getElementById('start-wrapper').style.display = 'none';
+  initialized = true;
+});
+
+// Build and (re)create the synth and audio graph
+async function initSynthAudio() {
+  // Master nodes
+  masterVol = new Tone.Volume(state.global.masterVol).toDestination();
+  masterPan = new Tone.Panner(state.global.pan).connect(masterVol);
+
+  // Effects
+  chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 4, depth: 0.4, type: 'sine', spread: 180 }).start();
+  const chorusWetGain = new Tone.Gain(state.effects.chorusWet);
+
+  distortion = new Tone.Distortion(state.effects.dist);
+  delay = new Tone.FeedbackDelay(state.effects.delayTime, state.effects.delayFB);
+  reverb = new Tone.Reverb({ decay: 2.2, preDelay: 0.01 });
+  reverb.generate && reverb.generate(); // try generate if available
+  reverb.wet.value = state.effects.reverbWet;
+
+  // Global filter
+  globalFilter = new Tone.Filter({
+    type: state.filter.type,
+    frequency: state.filter.cutoff,
+    Q: state.filter.q,
+    gain: state.filter.gain
+  });
+
+  // Filter envelope: Use Tone.ScaledEnvelope (AmplitudeEnvelope) to modulate frequency
+  // We'll implement a simple envelope that outputs 0..1, then scale to Hz.
+  // Use exponential curves for faster response
+  filterEnv = new Tone.AmplitudeEnvelope({
+    attack: state.filterEnv.attack,
+    decay: state.filterEnv.decay,
+    sustain: state.filterEnv.sustain,
+    release: state.filterEnv.release,
+    attackCurve: 'exponential', // Faster than linear
+    releaseCurve: 'exponential' // Faster than linear
+  });
+
+  // LFO (not started until we connect it)
+  lfo = new Tone.LFO({
+    type: state.lfo.wave,
+    frequency: state.lfo.rate,
+    min: -state.lfo.depth,
+    max: state.lfo.depth
+  });
+  lfo.stop(); // will start when connect
+
+  // Recreate synth voices & polySynth
+  recreatePolySynth();
+
+  // Create analyser for EQ visualization
+  analyser = new Tone.Analyser('fft', 1024);
+  
+  // Routing: polySynth -> globalFilter -> chorus -> distortion -> delay -> reverb -> pan -> master
+  polySynth.connect(filterEnv);
+  polySynth.connect(globalFilter);
+  // filterEnv will modulate filter frequency on trigger events (we'll do mapping in trigger handler)
+
+  globalFilter.connect(chorus);
+  chorus.connect(distortion);
+  distortion.connect(delay);
+  delay.connect(reverb);
+  reverb.connect(masterPan);
+  // Also connect to analyser for visualization (parallel connection)
+  masterPan.connect(analyser);
+  // start LFO
+  setupLFOConnections();
+  // apply current master settings
+  masterVol.volume.value = state.global.masterVol;
+  masterPan.pan.value = state.global.pan;
+  
+  // Start EQ visualization
+  startEQVisualization();
+}
+
+// Helper to create PolySynth with current state
+function recreatePolySynth() {
+  // Disconnect previous synth if exists
+  if (polySynth) {
+    try {
+      polySynth.dispose && polySynth.dispose();
+    } catch (e) {}
+  }
+
+  // Create PolySynth using Tone.Synth voices for fast, predictable behavior
+  // Use absolute minimum attack time for instant response
+  polySynth = new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: Number(state.polyphony),
+    voice: Tone.Synth,
+    options: {
+      oscillator: { type: state.osc.type },
+      // Use absolute minimum attack (0.00001s) - essentially instant
+      envelope: { attack: 0.00001, decay: 0.1, sustain: 0.3, release: 1.0 },
+      detune: state.osc.detune
+    }
+  });
+
+  // Set portamento on synths if supported (Tone.Synth voices do not have portamento; for glide, we can use Tone.PolySynth.set("voice", {portamento}) but poly synth of synth may not glide; we emulate pitch glide via glide logic in trigger if needed)
+  // Connectments will be performed by initSynthAudio(); but if polySynth exists in graph we need to reconnect manually
+  // To keep it simple, user must call initSynthAudio after changing polyphony — our UI will call recreateAndReconnect
+}
+
+// ==== Input handling (keyboard + MIDI) ====
+document.getElementById('input-select').addEventListener('change', (e) => {
+  const v = e.target.value;
+  if (v === 'keyboard') {
+    enableKeyboard();
+  } else {
+    enableMIDI();
+  }
+});
+
+// Keyboard
+function enableKeyboard() {
+  document.getElementById('instructionText')?.remove?.();
+  document.getElementById('keyboard-helper').style.display = 'block';
+
+  const kd = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const key = e.key.toLowerCase();
+    
+    // Handle octave changes
+    if (key === '-' || key === '_') {
+      changeOctave(-1);
+      return;
+    }
+    if (key === '=' || key === '+') {
+      changeOctave(1);
+      return;
+    }
+    
+    // Handle recording (/) and playback (space)
+    if (key === '/') {
+      recordCurrentNotes();
+      return;
+    }
+    if (key === ' ') {
+      e.preventDefault(); // Prevent page scroll
+      startStoredNotesPlayback();
+      return;
+    }
+    
+    if (keysPressed.has(key)) return;
+    const midi = keyboardLayout[key];
+    if (midi !== undefined) {
+      keysPressed.add(key);
+      triggerNote(midi);
+    }
+  };
+  const ku = (e) => {
+    const key = e.key.toLowerCase();
+    
+    // Handle spacebar release (stop stored notes playback)
+    if (key === ' ') {
+      e.preventDefault();
+      stopStoredNotesPlayback();
+      return;
+    }
+    
+    if (keysPressed.has(key)) {
+      const midi = keyboardLayout[key];
+      if (midi !== undefined) releaseNote(midi);
+      keysPressed.delete(key);
+    }
+  };
+  document.addEventListener('keydown', kd);
+  document.addEventListener('keyup', ku);
+
+  // store handlers for cleanup if needed (omitted for brevity)
+}
+
+// MIDI
+async function enableMIDI() {
+  document.getElementById('keyboard-helper').style.display = 'none';
+  try {
+    const access = await navigator.requestMIDIAccess();
+    for (const input of access.inputs.values()) {
+      input.onmidimessage = handleMidiMessage;
+    }
+  } catch (err) {
+    alert('MIDI not available: ' + err.message);
+    document.getElementById('input-select').value = 'keyboard';
+    enableKeyboard();
+  }
+}
+
+function handleMidiMessage(msg) {
+  const [status, note, vel] = msg.data;
+  const cmd = status & 0xf0;
+  if (cmd === 0x90 && vel > 0) {
+    triggerNote(note, vel / 127);
+  } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
+    releaseNote(note);
+  }
+}
+
+// Find visual key element for a MIDI note
+function findVisualKey(midi) {
+  // Search both keyboards for the key with matching MIDI note
+  const keyboards = ['upper-keyboard', 'lower-keyboard'];
+  for (const keyboardId of keyboards) {
+    const keyboard = document.getElementById(keyboardId);
+    if (!keyboard) continue;
+    const key = keyboard.querySelector(`[data-midi="${midi}"]`);
+    if (key) return key;
+  }
+  return null;
+}
+
+// ----- Note triggering (polyphony friendly) -----
+function triggerNote(midi, velocity = 1) {
+  if (!polySynth) return;
+  // Pre-calculate values to minimize computation during trigger
+  const octaveOffset = (state.global.octave || 0) * 12;
+  const transposed = Number(midi) + Number(state.global.transpose || 0) + octaveOffset;
+  const noteName = Tone.Frequency(transposed, 'midi').toNote();
+  
+  // Use Tone.immediate() for absolute minimum latency (even better than 0)
+  const now = Tone.immediate();
+  
+  // Trigger synth immediately
+  polySynth.triggerAttack(noteName, now, velocity);
+  
+  // Update filter envelope settings (only if changed to avoid unnecessary work)
+  if (filterEnv.attack !== state.filterEnv.attack) filterEnv.attack = state.filterEnv.attack;
+  if (filterEnv.decay !== state.filterEnv.decay) filterEnv.decay = state.filterEnv.decay;
+  if (filterEnv.sustain !== state.filterEnv.sustain) filterEnv.sustain = state.filterEnv.sustain;
+  if (filterEnv.release !== state.filterEnv.release) filterEnv.release = state.filterEnv.release;
+  filterEnv.triggerAttack(now);
+
+  // Track original MIDI note for cleanup
+  activeMidiNotes.add(midi);
+  
+  // Defer visual updates to avoid blocking audio thread
+  requestAnimationFrame(() => {
+    addActiveNoteVisual(transposed);
+    const visualKey = findVisualKey(midi);
+    if (visualKey) visualKey.classList.add('pressed');
+  });
+}
+
+function releaseNote(midi) {
+  if (!polySynth) return;
+  // Pre-calculate values
+  const octaveOffset = (state.global.octave || 0) * 12;
+  const transposed = Number(midi) + Number(state.global.transpose || 0) + octaveOffset;
+  const noteName = Tone.Frequency(transposed, 'midi').toNote();
+  const now = Tone.immediate(); // Use immediate for absolute minimum latency
+  polySynth.triggerRelease(noteName, now);
+  filterEnv.triggerRelease(now);
+  activeMidiNotes.delete(midi);
+  
+  // Defer visual updates to avoid blocking audio thread
+  requestAnimationFrame(() => {
+    removeActiveNoteVisual(transposed);
+    const visualKey = findVisualKey(midi);
+    if (visualKey) visualKey.classList.remove('pressed');
+  });
+}
+
+// ----- Active notes UI -----
+function addActiveNoteVisual(midi) {
+  const noteName = Tone.Frequency(midi, 'midi').toNote();
+  if (activeNotes.has(midi)) return;
+  const el = document.createElement('div');
+  el.className = 'note-bubble';
+  el.textContent = noteName;
+  document.getElementById('active-notes').appendChild(el);
+  activeNotes.set(midi, el);
+}
+function removeActiveNoteVisual(midi) {
+  const el = activeNotes.get(midi);
+  if (!el) return;
+  el.style.opacity = '0';
+  setTimeout(()=>{ el.remove(); }, 220);
+  activeNotes.delete(midi);
+}
+
+// ===== LFO connection and update helpers =====
+function setupLFOConnections() {
+  // ensure lfo has correct min/max depending on depth and target
+  const cutoff = Number(state.filter.cutoff);
+  const depth = Number(state.lfo.depth);
+  const min = -depth;
+  const max = depth;
+  lfo.min = min;
+  lfo.max = max;
+  lfo.type = state.lfo.wave;
+  lfo.frequency.value = state.lfo.rate;
+
+  // disconnect previously connected targets safely
+  try { lfo.disconnect(); } catch (e) {}
+
+  // connect to target
+  if (state.lfo.target === 'filter') {
+    // We'll route lfo to a function that adjusts the filter frequency around the base cutoff.
+    // Create a callback: lfo -> Callback -> set globalFilter.frequency.value to base + lfoValue + filterEnv contribution
+    const callback = (val) => {
+      // val is in Hz offsets (since lfo.min/max set to +/-depth)
+      const base = Number(state.filter.cutoff);
+      const envLevel = filterEnv.value; // filterEnv outputs 0..1 (amplitude envelope)
+      const envAmt = Number(state.filterEnv.amount) || 0;
+      // total = base + lfo + env * envAmt
+      const tot = Math.max(20, base + Number(val) + (envLevel * envAmt));
+      globalFilter.frequency.value = tot;
+    };
+    // Connect LFO to callback via Tone.Signal -> use lfo.connect to a Tone.Callback? Use lfo.value for periodic polling by starting lfo and using an interval.
+    // Simpler approach: use lfo.connect to a Tone.Gain then to a ScriptProcessor-like callback isn't available. We'll use an internal listener by reading lfo.value on animation frame.
+    // Start LFO
+    lfo.start();
+    // Keep a RAF loop to update filter
+    if (!window.__lfoRAF) {
+      window.__lfoRAF = true;
+      const tick = () => {
+        if (!lfo || !globalFilter) { requestAnimationFrame(tick); return; }
+        const val = lfo.value; // value between min/max
+        callback(val);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+  } else if (state.lfo.target === 'pitch') {
+    // connect lfo to master detune: apply as cents applied to polySynth.detune if available
+    // We'll implement by reading lfo.value (Hz) and converting to cents ~ 1200*log2((f+base)/base), but simpler: map depth to cents directly by setting lfo.min/max to -depth..depth in cents and then applying to detune
+    lfo.min = -state.lfo.depth; lfo.max = state.lfo.depth;
+    lfo.start();
+    if (!window.__lfoPitchRAF) {
+      window.__lfoPitchRAF = true;
+      const tick2 = () => {
+        if (!lfo || !polySynth) { requestAnimationFrame(tick2); return; }
+        const cents = lfo.value;
+        // apply detune to all voices by setting state.osc.detune + cents
+        polySynth.set({ detune: state.osc.detune + cents });
+        requestAnimationFrame(tick2);
+      };
+      requestAnimationFrame(tick2);
+    }
+  } else if (state.lfo.target === 'pan') {
+    lfo.start();
+    if (!window.__lfoPanRAF) {
+      window.__lfoPanRAF = true;
+      const tick3 = () => {
+        if (!lfo || !masterPan) { requestAnimationFrame(tick3); return; }
+        // map lfo.value (min..max) to -1..1 pan
+        const d = state.lfo.depth || 1;
+        const panVal = (lfo.value / (d||1));
+        masterPan.pan.value = Math.max(-1, Math.min(1, panVal));
+        requestAnimationFrame(tick3);
+      };
+      requestAnimationFrame(tick3);
+    }
+  } else {
+    lfo.stop();
+  }
+}
+
+// ====== UI wiring: read elements, apply to state and nodes =======
+function $(id) { return document.getElementById(id); }
+
+// Record currently playing notes
+function recordCurrentNotes() {
+  // Get all currently active MIDI notes (before transpose/octave)
+  storedNotes = Array.from(activeMidiNotes);
+  updateStoredNotesDisplay();
+  console.log('Recorded notes:', storedNotes);
+}
+
+// Update stored notes display
+function updateStoredNotesDisplay() {
+  const container = document.getElementById('stored-notes-list');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  if (storedNotes.length === 0) {
+    container.innerHTML = '<div class="stored-notes-empty">No notes stored</div>';
+    return;
+  }
+  
+  storedNotes.forEach(midi => {
+    const noteName = Tone.Frequency(midi, 'midi').toNote();
+    const el = document.createElement('span');
+    el.className = 'stored-note';
+    el.textContent = noteName;
+    container.appendChild(el);
+  });
+}
+
+// Start playing stored notes (called on spacebar down)
+function startStoredNotesPlayback() {
+  if (storedNotes.length === 0) {
+    console.log('No stored notes to play');
+    return;
+  }
+  
+  // If already playing, don't restart
+  if (storedNotesPlaying.size > 0) {
+    return;
+  }
+  
+  // Release any currently playing notes first (except stored notes)
+  if (polySynth && activeMidiNotes.size > 0) {
+    activeMidiNotes.forEach(midi => {
+      // Only release if it's not a stored note we're about to play
+      if (!storedNotes.includes(midi)) {
+        const octaveOffset = (state.global.octave || 0) * 12;
+        const transposed = Number(midi) + Number(state.global.transpose || 0) + octaveOffset;
+        const noteName = Tone.Frequency(transposed, 'midi').toNote();
+        polySynth.triggerRelease(noteName, Tone.immediate());
+        activeMidiNotes.delete(midi);
+      }
+    });
+  }
+  
+  // Clear visual notes for non-stored notes
+  document.querySelectorAll('.white-key.pressed, .black-key.pressed').forEach(key => {
+    const midi = parseInt(key.getAttribute('data-midi'));
+    if (midi !== null && !storedNotes.includes(midi)) {
+      key.classList.remove('pressed');
+    }
+  });
+  
+  // Play all stored notes simultaneously
+  storedNotes.forEach(midi => {
+    storedNotesPlaying.add(midi);
+    triggerNote(midi, 1);
+  });
+  
+  console.log('Started playing stored notes:', storedNotes);
+}
+
+// Stop playing stored notes (called on spacebar up)
+function stopStoredNotesPlayback() {
+  if (storedNotesPlaying.size === 0) {
+    return;
+  }
+  
+  // Release all stored notes that are currently playing
+  storedNotesPlaying.forEach(midi => {
+    const octaveOffset = (state.global.octave || 0) * 12;
+    const transposed = Number(midi) + Number(state.global.transpose || 0) + octaveOffset;
+    const noteName = Tone.Frequency(transposed, 'midi').toNote();
+    const now = Tone.immediate();
+    polySynth.triggerRelease(noteName, now);
+    filterEnv.triggerRelease(now);
+    activeMidiNotes.delete(midi);
+    
+    // Remove visual feedback
+    requestAnimationFrame(() => {
+      removeActiveNoteVisual(transposed);
+      const visualKey = findVisualKey(midi);
+      if (visualKey) visualKey.classList.remove('pressed');
+    });
+  });
+  
+  storedNotesPlaying.clear();
+  console.log('Stopped playing stored notes');
+}
+
+// Change octave (called by keyboard shortcuts)
+function changeOctave(delta) {
+  const newOctave = Math.max(-3, Math.min(3, (state.global.octave || 0) + delta));
+  
+  // Release all currently playing notes before changing octave
+  if (polySynth && activeMidiNotes.size > 0) {
+    const now = 0; // Immediate release
+    // Release all notes from the synth
+    polySynth.releaseAll(now);
+    // Release filter envelope
+    if (filterEnv) filterEnv.triggerRelease(now);
+    
+    // Clear all active notes visually
+    activeNotes.forEach((el) => {
+      el.style.opacity = '0';
+      setTimeout(() => { el.remove(); }, 220);
+    });
+    activeNotes.clear();
+    // Clear all pressed visual keys
+    document.querySelectorAll('.white-key.pressed, .black-key.pressed').forEach(key => {
+      key.classList.remove('pressed');
+    });
+    activeMidiNotes.clear();
+    keysPressed.clear();
+  }
+  
+  state.global.octave = newOctave;
+  $('octave').value = newOctave;
+  $('octave-val').textContent = newOctave;
+  $('octave-display').textContent = newOctave;
+}
+
+// Apply a preset to state and UI
+function applyPreset(presetName) {
+  const preset = presets[presetName];
+  if (!preset) return;
+
+  // Update state
+  Object.assign(state, JSON.parse(JSON.stringify(preset)));
+
+  // Update UI controls
+  $('osc-wave').value = state.osc.type;
+  $('detune').value = state.osc.detune;
+  $('detune-val').textContent = state.osc.detune;
+  $('portamento').value = state.portamento;
+  $('port-val').textContent = state.portamento.toFixed(2);
+  $('polyphony').value = state.polyphony;
+  $('voice-count-label').textContent = state.polyphony;
+
+  $('filter-type').value = state.filter.type;
+  $('filter-cutoff').value = state.filter.cutoff;
+  $('cutoff-val').textContent = state.filter.cutoff;
+  $('filter-q').value = state.filter.q;
+  $('q-val').textContent = Number(state.filter.q).toFixed(1);
+  $('filter-gain').value = state.filter.gain;
+  $('f-gain-val').textContent = state.filter.gain;
+
+  $('filter-env-amount').value = state.filterEnv.amount;
+  $('fenv-amt-val').textContent = state.filterEnv.amount;
+  $('fenv-attack').value = state.filterEnv.attack;
+  $('fenv-a-val').textContent = Number(state.filterEnv.attack).toFixed(3);
+  $('fenv-decay').value = state.filterEnv.decay;
+  $('fenv-d-val').textContent = Number(state.filterEnv.decay).toFixed(3);
+  $('fenv-sustain').value = state.filterEnv.sustain;
+  $('fenv-s-val').textContent = Number(state.filterEnv.sustain).toFixed(2);
+  $('fenv-release').value = state.filterEnv.release;
+  $('fenv-r-val').textContent = Number(state.filterEnv.release).toFixed(2);
+
+  $('lfo-wave').value = state.lfo.wave;
+  $('lfo-rate').value = state.lfo.rate;
+  $('lfo-rate-val').textContent = Number(state.lfo.rate).toFixed(2);
+  $('lfo-depth').value = state.lfo.depth;
+  $('lfo-depth-val').textContent = state.lfo.depth;
+  $('lfo-target').value = state.lfo.target;
+
+  $('reverb-wet').value = state.effects.reverbWet;
+  $('reverb-val').textContent = Number(state.effects.reverbWet).toFixed(2);
+  $('delay-time').value = state.effects.delayTime;
+  $('delay-time-val').textContent = Number(state.effects.delayTime).toFixed(3);
+  $('delay-fb').value = state.effects.delayFB;
+  $('delay-fb-val').textContent = Number(state.effects.delayFB).toFixed(2);
+  $('chorus-wet').value = state.effects.chorusWet;
+  $('chorus-val').textContent = Number(state.effects.chorusWet).toFixed(2);
+  $('dist-amt').value = state.effects.dist;
+  $('dist-val').textContent = Number(state.effects.dist).toFixed(2);
+
+  $('master-volume').value = state.global.masterVol;
+  $('master-val').textContent = state.global.masterVol;
+  $('pan').value = state.global.pan;
+  $('pan-val').textContent = Number(state.global.pan).toFixed(2);
+  $('transpose').value = state.global.transpose;
+  $('transpose-val').textContent = state.global.transpose;
+  $('octave').value = state.global.octave || 0;
+  $('octave-val').textContent = state.global.octave || 0;
+  $('octave-display').textContent = state.global.octave || 0;
+
+  // Apply to audio nodes if initialized
+  if (initialized && polySynth) {
+    // Update oscillator
+    polySynth.set({ oscillator: { type: state.osc.type }, detune: state.osc.detune });
+    
+    // Update filter
+    if (globalFilter) {
+      globalFilter.type = state.filter.type;
+      globalFilter.frequency.value = state.filter.cutoff;
+      globalFilter.Q = state.filter.q;
+      globalFilter.gain = state.filter.gain;
+    }
+    
+    // Update filter envelope
+    if (filterEnv) {
+      filterEnv.attack = state.filterEnv.attack;
+      filterEnv.decay = state.filterEnv.decay;
+      filterEnv.sustain = state.filterEnv.sustain;
+      filterEnv.release = state.filterEnv.release;
+    }
+    
+    // Update LFO
+    if (lfo) {
+      lfo.type = state.lfo.wave;
+      lfo.frequency.value = state.lfo.rate;
+      lfo.min = -state.lfo.depth;
+      lfo.max = state.lfo.depth;
+      setupLFOConnections();
+    }
+    
+    // Update effects
+    if (reverb) reverb.wet.value = state.effects.reverbWet;
+    if (delay) {
+      delay.delayTime.value = state.effects.delayTime;
+      delay.feedback.value = state.effects.delayFB;
+    }
+    if (chorus) {
+      chorus.depth = Math.max(0, Math.min(1, state.effects.chorusWet * 2));
+    }
+    if (distortion) distortion.distortion = state.effects.dist;
+    
+    // Update global
+    if (masterVol) masterVol.volume.value = state.global.masterVol;
+    if (masterPan) masterPan.pan.value = state.global.pan;
+    
+    // Recreate synth if polyphony changed
+    const currentPoly = polySynth.maxPolyphony || 8;
+    if (currentPoly !== state.polyphony) {
+      recreatePolySynth();
+      initSynthAudio();
+    }
+  }
+}
+
+// attach many listeners in a compact way
+function wireUI() {
+
+  // Preset selector
+  $('preset-select').addEventListener('change', (e) => {
+    applyPreset(e.target.value);
+  });
+
+  // oscillator
+  $('osc-wave').addEventListener('change', (e) => {
+    state.osc.type = e.target.value;
+    if (polySynth) polySynth.set({ oscillator: { type: state.osc.type } });
+  });
+
+  $('detune').addEventListener('input', (e) => {
+    state.osc.detune = Number(e.target.value);
+    $('detune-val').textContent = e.target.value;
+    if (polySynth) polySynth.set({ detune: state.osc.detune });
+  });
+
+  $('portamento').addEventListener('input', (e) => {
+    state.portamento = Number(e.target.value);
+    $('port-val').textContent = state.portamento.toFixed(2);
+    // portamento effect is not implemented per-voice here — would require Monophonic voices; still tracked for later.
+  });
+
+  $('polyphony').addEventListener('change', (e) => {
+    state.polyphony = Number(e.target.value);
+    $('voice-count-label').textContent = e.target.value;
+    // Recreate synth and reconnect graph
+    // Save current connections, then re-init audio graph
+    recreatePolySynth();
+    // reconnect nodes - simplest to reinitialize the whole audio graph
+    if (initialized) initSynthAudio();
+  });
+
+  // Filter basic
+  $('filter-type').addEventListener('change', (e) => {
+    state.filter.type = e.target.value;
+    if (globalFilter) globalFilter.type = state.filter.type;
+  });
+
+  $('filter-cutoff').addEventListener('input', (e) => {
+    state.filter.cutoff = Number(e.target.value);
+    $('cutoff-val').textContent = e.target.value;
+    if (globalFilter) globalFilter.frequency.value = state.filter.cutoff;
+  });
+
+  $('filter-q').addEventListener('input', (e) => {
+    state.filter.q = Number(e.target.value);
+    $('q-val').textContent = Number(e.target.value).toFixed(1);
+    if (globalFilter) globalFilter.Q = state.filter.q;
+  });
+
+  $('filter-gain').addEventListener('input', (e) => {
+    state.filter.gain = Number(e.target.value);
+    $('f-gain-val').textContent = e.target.value;
+    if (globalFilter) globalFilter.gain = state.filter.gain;
+  });
+
+  // Filter envelope
+  $('filter-env-amount').addEventListener('input', (e) => {
+    state.filterEnv.amount = Number(e.target.value);
+    $('fenv-amt-val').textContent = e.target.value;
+  });
+
+  $('fenv-attack').addEventListener('input', (e) => {
+    state.filterEnv.attack = Number(e.target.value);
+    $('fenv-a-val').textContent = Number(e.target.value).toFixed(3);
+  });
+  $('fenv-decay').addEventListener('input', (e) => {
+    state.filterEnv.decay = Number(e.target.value);
+    $('fenv-d-val').textContent = Number(e.target.value).toFixed(3);
+  });
+  $('fenv-sustain').addEventListener('input', (e) => {
+    state.filterEnv.sustain = Number(e.target.value);
+    $('fenv-s-val').textContent = Number(e.target.value).toFixed(2);
+  });
+  $('fenv-release').addEventListener('input', (e) => {
+    state.filterEnv.release = Number(e.target.value);
+    $('fenv-r-val').textContent = Number(e.target.value).toFixed(2);
+  });
+
+  // LFO
+  $('lfo-wave').addEventListener('change', (e) => {
+    state.lfo.wave = e.target.value;
+    if (lfo) { lfo.type = state.lfo.wave; }
+  });
+  $('lfo-rate').addEventListener('input', (e) => {
+    state.lfo.rate = Number(e.target.value);
+    $('lfo-rate-val').textContent = Number(e.target.value).toFixed(2);
+    if (lfo) lfo.frequency.value = state.lfo.rate;
+  });
+  $('lfo-depth').addEventListener('input', (e) => {
+    state.lfo.depth = Number(e.target.value);
+    $('lfo-depth-val').textContent = Number(e.target.value);
+    if (lfo) {
+      lfo.min = -state.lfo.depth;
+      lfo.max = state.lfo.depth;
+    }
+  });
+  $('lfo-target').addEventListener('change', (e) => {
+    state.lfo.target = e.target.value;
+    // re-setup lfo behavior
+    setupLFOConnections();
+  });
+
+  // Effects
+  $('reverb-wet').addEventListener('input', (e) => {
+    state.effects.reverbWet = Number(e.target.value);
+    $('reverb-val').textContent = Number(e.target.value).toFixed(2);
+    if (reverb) reverb.wet.value = state.effects.reverbWet;
+  });
+  $('delay-time').addEventListener('input', (e) => {
+    state.effects.delayTime = Number(e.target.value);
+    $('delay-time-val').textContent = Number(e.target.value);
+    if (delay) delay.delayTime.value = state.effects.delayTime;
+  });
+  $('delay-fb').addEventListener('input', (e) => {
+    state.effects.delayFB = Number(e.target.value);
+    $('delay-fb-val').textContent = Number(e.target.value);
+    if (delay) delay.feedback.value = state.effects.delayFB;
+  });
+  $('chorus-wet').addEventListener('input', (e) => {
+    state.effects.chorusWet = Number(e.target.value);
+    $('chorus-val').textContent = Number(e.target.value);
+    // simple approach: control chorus.wet via a gain - we used a Gain earlier but didn't expose it; instead adjust chorus.depth as proxy
+    if (chorus) {
+      chorus.depth = Math.max(0, Math.min(1, state.effects.chorusWet * 2));
+    }
+  });
+  $('dist-amt').addEventListener('input', (e) => {
+    state.effects.dist = Number(e.target.value);
+    $('dist-val').textContent = Number(e.target.value).toFixed(2);
+    if (distortion) distortion.distortion = state.effects.dist;
+  });
+
+  // Global
+  $('master-volume').addEventListener('input', (e) => {
+    state.global.masterVol = Number(e.target.value);
+    $('master-val').textContent = state.global.masterVol;
+    if (masterVol) masterVol.volume.value = state.global.masterVol;
+  });
+  $('pan').addEventListener('input', (e) => {
+    state.global.pan = Number(e.target.value);
+    $('pan-val').textContent = Number(e.target.value).toFixed(2);
+    if (masterPan) masterPan.pan.value = state.global.pan;
+  });
+  $('transpose').addEventListener('input', (e) => {
+    state.global.transpose = Number(e.target.value);
+    $('transpose-val').textContent = Number(e.target.value);
+  });
+  $('octave').addEventListener('input', (e) => {
+    state.global.octave = Number(e.target.value);
+    $('octave-val').textContent = Number(e.target.value);
+    $('octave-display').textContent = Number(e.target.value);
+  });
+
+  // Detune initial display
+  $('detune-val').textContent = $('detune').value;
+  $('port-val').textContent = $('portamento').value;
+  $('voice-count-label').textContent = $('polyphony').value;
+}
+
+// Kick off wiring
+wireUI();
+
+/* ============================
+   Special: update filter frequency based on filterEnv values
+   We'll implement a small periodic updater so filter frequency = baseCutoff + filterEnv.value*envAmount + currentLFO
+   ============================ */
+(function filterUpdaterLoop() {
+  let lastCutoff = state.filter.cutoff;
+  const tick = () => {
+    if (globalFilter && filterEnv) {
+      const base = Number(state.filter.cutoff);
+      const envAmt = Number(state.filterEnv.amount);
+      const envLevel = filterEnv.value || 0; // 0..1
+      // lfo contribution: we'll use lfo.value if available (set up by the RAF loop in setupLFOConnections)
+      const lfoContribution = lfo ? lfo.value || 0 : 0;
+      const targetFreq = Math.max(20, base + envLevel * envAmt + lfoContribution);
+      globalFilter.frequency.value = targetFreq;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})();
+
+/* ============================
+   EQ Visualization
+   ============================ */
+function startEQVisualization() {
+  const canvas = document.getElementById('eq-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  
+  function draw() {
+    if (!analyser || !initialized) {
+      requestAnimationFrame(draw);
+      return;
+    }
+    
+    // Get frequency data
+    const values = analyser.getValue();
+    
+    // Clear canvas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw grid lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = (height / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+    
+    // Draw frequency bars
+    const barCount = 64; // Number of bars to display
+    const barWidth = width / barCount;
+    const maxValue = 255;
+    
+    // Draw bars with gradient
+    for (let i = 0; i < barCount; i++) {
+      // Map to logarithmic frequency scale (20Hz - 20kHz)
+      const freqRatio = i / barCount;
+      const freq = 20 * Math.pow(20000 / 20, freqRatio);
+      const dataIndex = Math.floor((freq / 20000) * values.length);
+      const safeIndex = Math.min(Math.max(dataIndex, 0), values.length - 1);
+      const value = Math.abs(values[safeIndex]);
+      
+      // Normalize and scale
+      const normalizedValue = Math.min(value / maxValue, 1);
+      const barHeight = normalizedValue * height * 0.9;
+      
+      // Color gradient: low (blue) -> mid (green) -> high (red)
+      const hue = 240 - (i / barCount) * 180; // 240 (blue) to 60 (yellow-red)
+      ctx.fillStyle = `hsl(${hue}, 70%, ${50 + normalizedValue * 30}%)`;
+      
+      // Draw bar
+      ctx.fillRect(i * barWidth, height - barHeight, barWidth - 1, barHeight);
+    }
+    
+    // Draw filter cutoff line if filter is active
+    if (globalFilter) {
+      const cutoff = globalFilter.frequency.value;
+      // Map cutoff frequency to x position (logarithmic)
+      const cutoffX = ((Math.log10(cutoff) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20))) * width;
+      ctx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cutoffX, 0);
+      ctx.lineTo(cutoffX, height);
+      ctx.stroke();
+      
+      // Draw filter type indicator
+      ctx.fillStyle = 'rgba(76, 175, 80, 0.6)';
+      ctx.font = '10px Arial';
+      ctx.fillText(state.filter.type, cutoffX + 5, 15);
+    }
+    
+    requestAnimationFrame(draw);
+  }
+  
+  draw();
+}
+
+
+// Reconnect everything when page unload or when user changes settings drastically
+window.addEventListener('beforeunload', () => {
+  try { Tone.Transport.stop(); } catch (e) {}
+});
+
+/* ============================
+   UX touches: show start values in UI (initial)
+   ============================ */
+document.addEventListener('DOMContentLoaded', () => {
+  // fill initial labels
+  $('cutoff-val').textContent = $('filter-cutoff').value;
+  $('q-val').textContent = Number($('filter-q').value).toFixed(1);
+  $('fenv-amt-val').textContent = $('filter-env-amount').value;
+  $('fenv-a-val').textContent = Number($('fenv-attack').value).toFixed(3);
+  $('fenv-d-val').textContent = Number($('fenv-decay').value).toFixed(3);
+  $('fenv-s-val').textContent = Number($('fenv-sustain').value).toFixed(2);
+  $('fenv-r-val').textContent = Number($('fenv-release').value).toFixed(2);
+  $('lfo-rate-val').textContent = Number($('lfo-rate').value).toFixed(2);
+  $('lfo-depth-val').textContent = $('lfo-depth').value;
+  $('detune-val').textContent = $('detune').value;
+  $('master-val').textContent = $('master-volume').value;
+  $('pan-val').textContent = $('pan').value;
+  $('reverb-val').textContent = $('reverb-wet').value;
+  $('delay-time-val').textContent = $('delay-time').value;
+  $('delay-fb-val').textContent = $('delay-fb').value;
+  $('chorus-val').textContent = $('chorus-wet').value;
+  $('dist-val').textContent = $('dist-amt').value;
+  $('voice-count-label').textContent = $('polyphony').value;
+  $('transpose-val').textContent = $('transpose').value;
+  $('octave-val').textContent = $('octave').value;
+  $('octave-display').textContent = $('octave').value;
+
+  // default keyboard enabled
+  enableKeyboard();
+  
+  // Position black keys on piano keyboards
+  function positionBlackKeys() {
+    const keyboards = ['lower-keyboard', 'upper-keyboard'];
+    keyboards.forEach(keyboardId => {
+      const keyboard = document.getElementById(keyboardId);
+      if (!keyboard) return;
+      
+      const whiteKeys = keyboard.querySelectorAll('.white-key');
+      const blackKeys = keyboard.querySelectorAll('.black-key');
+      
+      // Black key positions: between white keys
+      // C# between keys 0-1, D# between 1-2, F# between 3-4, G# between 4-5, A# between 5-6
+      const blackKeyPositions = [0, 1, 3, 4, 5]; // indices of white keys before each black key
+      
+      blackKeys.forEach((blackKey, index) => {
+        const whiteKeyIndex = blackKeyPositions[index];
+        if (whiteKeyIndex < whiteKeys.length) {
+          const whiteKey = whiteKeys[whiteKeyIndex];
+          const whiteKeyWidth = whiteKey.offsetWidth;
+          // Position black key at the right edge of the white key (between two white keys)
+          const leftPos = whiteKey.offsetLeft + whiteKeyWidth - 7; // -7 to center the 14px black key
+          blackKey.style.left = leftPos + 'px';
+        }
+      });
+    });
+  }
+  
+  // Position black keys after a short delay to ensure layout is complete
+  setTimeout(positionBlackKeys, 100);
+  window.addEventListener('resize', positionBlackKeys);
+});
+
+/* ============================
+   NOTES:
+   - This file intentionally uses a global filter + envelope and LFO RAF loops for stable browser behavior.
+   - For per-voice filter envelopes you can switch to Tone.MonoSynth as voice type in PolySynth, but that takes more code to reliably manage.
+   - Portamento / glide is not implemented per-voice in this simple poly synth; it requires monophonic glide logic or shared pitch ramping.
+   - If you'd like a per-voice filter envelope, a fat oscillator stack, or more modular routings (LFO per-voice), tell me and I'll generate a variant.
+   ============================ */
+
+</script>
+</body>
+</html>
+

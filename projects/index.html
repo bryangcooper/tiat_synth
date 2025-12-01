@@ -102,24 +102,24 @@
     <div class="section" style="border-bottom:2px solid rgba(255,255,255,0.1);">
       <h3>Presets</h3>
       <div class="row">
-        <label>Instrument</label>
+        <label>Sound Profile</label>
         <select id="preset-select" style="flex:1;">
           <option value="default">Default</option>
-          <option value="piano">Piano</option>
-          <option value="grand-piano">Grand Piano</option>
-          <option value="electric-piano">Electric Piano</option>
-          <option value="wurlitzer">Wurlitzer</option>
-          <option value="rhodes">Rhodes</option>
-          <option value="acoustic-guitar">Acoustic Guitar</option>
-          <option value="electric-guitar">Electric Guitar</option>
-          <option value="voice">Voice/Vocal</option>
-          <option value="synth-pad">Synth Pad</option>
-          <option value="synth-lead">Synth Lead</option>
-          <option value="synth-bass">Synth Bass</option>
-          <option value="brass">Brass</option>
-          <option value="strings">Strings</option>
-          <option value="organ">Organ</option>
-          <option value="bell">Bell</option>
+          <option value="dark">Dark</option>
+          <option value="ethereal">Ethereal</option>
+          <option value="bubbly">Bubbly</option>
+          <option value="warm">Warm</option>
+          <option value="bright">Bright</option>
+          <option value="mellow">Mellow</option>
+          <option value="crisp">Crisp</option>
+          <option value="smooth">Smooth</option>
+          <option value="gritty">Gritty</option>
+          <option value="airy">Airy</option>
+          <option value="punchy">Punchy</option>
+          <option value="dreamy">Dreamy</option>
+          <option value="metallic">Metallic</option>
+          <option value="woody">Woody</option>
+          <option value="glassy">Glassy</option>
         </select>
       </div>
     </div>
@@ -544,147 +544,147 @@ const presets = {
     effects: { reverbWet: 0.12, delayTime: 0.25, delayFB: 0.24, chorusWet: 0.15, dist: 0 },
     global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
   },
-  'piano': {
-    osc: { type: 'sawtooth', detune: 8 },
-    portamento: 0,
-    polyphony: 16,
-    filter: { type: 'lowpass', cutoff: 2500, q: 1.5, gain: 0 },
-    filterEnv: { amount: 4000, attack: 0.001, decay: 0.4, sustain: 0.05, release: 1.2 },
-    lfo: { wave: 'sine', rate: 0.1, depth: 0, target: 'filter' },
-    effects: { reverbWet: 0.3, delayTime: 0.1, delayFB: 0.1, chorusWet: 0.15, dist: 0 },
-    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
-  },
-  'grand-piano': {
-    osc: { type: 'sawtooth', detune: 12 },
-    portamento: 0,
-    polyphony: 16,
-    filter: { type: 'lowpass', cutoff: 3000, q: 2, gain: 1 },
-    filterEnv: { amount: 5000, attack: 0.001, decay: 0.5, sustain: 0.08, release: 1.5 },
-    lfo: { wave: 'sine', rate: 0.08, depth: 15, target: 'pitch' },
-    effects: { reverbWet: 0.4, delayTime: 0.08, delayFB: 0.08, chorusWet: 0.2, dist: 0 },
-    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
-  },
-  'electric-piano': {
-    osc: { type: 'sawtooth', detune: 10 },
-    portamento: 0,
-    polyphony: 8,
-    filter: { type: 'lowpass', cutoff: 2200, q: 2, gain: 0 },
-    filterEnv: { amount: 2500, attack: 0.002, decay: 0.25, sustain: 0.4, release: 0.6 },
-    lfo: { wave: 'sine', rate: 4.5, depth: 250, target: 'filter' },
-    effects: { reverbWet: 0.25, delayTime: 0.18, delayFB: 0.18, chorusWet: 0.4, dist: 0 },
-    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
-  },
-  'wurlitzer': {
-    osc: { type: 'sawtooth', detune: 15 },
-    portamento: 0,
-    polyphony: 8,
-    filter: { type: 'lowpass', cutoff: 2400, q: 3, gain: 2 },
-    filterEnv: { amount: 3000, attack: 0.001, decay: 0.2, sustain: 0.5, release: 0.5 },
-    lfo: { wave: 'sine', rate: 5.5, depth: 300, target: 'filter' },
-    effects: { reverbWet: 0.2, delayTime: 0.15, delayFB: 0.15, chorusWet: 0.3, dist: 0.15 },
-    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
-  },
-  'rhodes': {
-    osc: { type: 'sawtooth', detune: 12 },
-    portamento: 0,
-    polyphony: 8,
-    filter: { type: 'lowpass', cutoff: 2600, q: 2.5, gain: 0 },
-    filterEnv: { amount: 3500, attack: 0.001, decay: 0.3, sustain: 0.45, release: 0.7 },
-    lfo: { wave: 'sine', rate: 6, depth: 350, target: 'filter' },
-    effects: { reverbWet: 0.25, delayTime: 0.2, delayFB: 0.18, chorusWet: 0.45, dist: 0.08 },
-    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
-  },
-  'acoustic-guitar': {
-    osc: { type: 'sawtooth', detune: 5 },
-    portamento: 0,
-    polyphony: 6,
-    filter: { type: 'lowpass', cutoff: 4500, q: 1.8, gain: 0 },
-    filterEnv: { amount: 5000, attack: 0.001, decay: 0.6, sustain: 0.15, release: 1.5 },
-    lfo: { wave: 'sine', rate: 0.3, depth: 0, target: 'filter' },
-    effects: { reverbWet: 0.35, delayTime: 0.25, delayFB: 0.2, chorusWet: 0.2, dist: 0 },
-    global: { masterVol: -10, pan: 0, transpose: 0 }
-  },
-  'electric-guitar': {
+  'dark': {
     osc: { type: 'sawtooth', detune: 0 },
-    portamento: 0,
-    polyphony: 6,
-    filter: { type: 'lowpass', cutoff: 3500, q: 4, gain: 0 },
-    filterEnv: { amount: 4000, attack: 0.005, decay: 0.4, sustain: 0.5, release: 0.6 },
-    lfo: { wave: 'sine', rate: 7, depth: 300, target: 'filter' },
-    effects: { reverbWet: 0.25, delayTime: 0.3, delayFB: 0.35, chorusWet: 0.25, dist: 0.5 },
-    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
-  },
-  'voice': {
-    osc: { type: 'sawtooth', detune: 3 },
-    portamento: 0.15,
-    polyphony: 4,
-    filter: { type: 'bandpass', cutoff: 1800, q: 5, gain: 0 },
-    filterEnv: { amount: 2000, attack: 0.08, decay: 0.3, sustain: 0.6, release: 0.5 },
-    lfo: { wave: 'sine', rate: 5, depth: 80, target: 'pitch' },
-    effects: { reverbWet: 0.45, delayTime: 0.15, delayFB: 0.15, chorusWet: 0.35, dist: 0 },
+    portamento: 0.1,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 800, q: 4, gain: 0 },
+    filterEnv: { amount: 2000, attack: 0.3, decay: 0.6, sustain: 0.5, release: 1.0 },
+    lfo: { wave: 'sine', rate: 0.5, depth: 100, target: 'filter' },
+    effects: { reverbWet: 0.4, delayTime: 0.4, delayFB: 0.3, chorusWet: 0.2, dist: 0.3 },
     global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
   },
-  'synth-pad': {
-    osc: { type: 'sawtooth', detune: 10 },
-    portamento: 0.4,
-    polyphony: 8,
-    filter: { type: 'lowpass', cutoff: 1800, q: 1.2, gain: 0 },
-    filterEnv: { amount: 2000, attack: 0.8, decay: 1.0, sustain: 0.75, release: 2.0 },
-    lfo: { wave: 'sine', rate: 0.8, depth: 400, target: 'filter' },
-    effects: { reverbWet: 0.6, delayTime: 0.5, delayFB: 0.35, chorusWet: 0.5, dist: 0 },
+  'ethereal': {
+    osc: { type: 'sawtooth', detune: 12 },
+    portamento: 0.5,
+    polyphony: 12,
+    filter: { type: 'lowpass', cutoff: 2000, q: 1.5, gain: 0 },
+    filterEnv: { amount: 1500, attack: 1.0, decay: 1.2, sustain: 0.8, release: 2.5 },
+    lfo: { wave: 'sine', rate: 0.3, depth: 300, target: 'filter' },
+    effects: { reverbWet: 0.7, delayTime: 0.6, delayFB: 0.4, chorusWet: 0.6, dist: 0 },
     global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
   },
-  'synth-lead': {
-    osc: { type: 'sawtooth', detune: 0 },
-    portamento: 0.2,
-    polyphony: 1,
-    filter: { type: 'lowpass', cutoff: 4000, q: 5, gain: 0 },
-    filterEnv: { amount: 5000, attack: 0.005, decay: 0.4, sustain: 0.4, release: 0.5 },
-    lfo: { wave: 'square', rate: 10, depth: 500, target: 'filter' },
-    effects: { reverbWet: 0.2, delayTime: 0.25, delayFB: 0.3, chorusWet: 0.25, dist: 0.25 },
-    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
-  },
-  'synth-bass': {
-    osc: { type: 'square', detune: 0 },
-    portamento: 0.08,
-    polyphony: 1,
-    filter: { type: 'lowpass', cutoff: 600, q: 6, gain: 0 },
-    filterEnv: { amount: 3000, attack: 0.001, decay: 0.25, sustain: 0.6, release: 0.4 },
-    lfo: { wave: 'sine', rate: 1.5, depth: 150, target: 'filter' },
-    effects: { reverbWet: 0.12, delayTime: 0.12, delayFB: 0.15, chorusWet: 0, dist: 0.35 },
-    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
-  },
-  'brass': {
-    osc: { type: 'sawtooth', detune: 8 },
+  'bubbly': {
+    osc: { type: 'triangle', detune: 8 },
     portamento: 0,
-    polyphony: 4,
-    filter: { type: 'lowpass', cutoff: 2800, q: 4, gain: 2 },
-    filterEnv: { amount: 3500, attack: 0.15, decay: 0.4, sustain: 0.7, release: 0.6 },
-    lfo: { wave: 'sine', rate: 4, depth: 200, target: 'filter' },
-    effects: { reverbWet: 0.35, delayTime: 0.18, delayFB: 0.15, chorusWet: 0.3, dist: 0 },
+    polyphony: 8,
+    filter: { type: 'bandpass', cutoff: 3000, q: 6, gain: 2 },
+    filterEnv: { amount: 4000, attack: 0.001, decay: 0.1, sustain: 0.0, release: 0.3 },
+    lfo: { wave: 'sine', rate: 8, depth: 500, target: 'filter' },
+    effects: { reverbWet: 0.25, delayTime: 0.15, delayFB: 0.2, chorusWet: 0.4, dist: 0 },
     global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
   },
-  'strings': {
-    osc: { type: 'sawtooth', detune: 6 },
-    portamento: 0.25,
-    polyphony: 12,
-    filter: { type: 'lowpass', cutoff: 3500, q: 2.5, gain: 0 },
-    filterEnv: { amount: 2500, attack: 0.4, decay: 0.6, sustain: 0.7, release: 1.2 },
-    lfo: { wave: 'sine', rate: 1.5, depth: 250, target: 'filter' },
+  'warm': {
+    osc: { type: 'sawtooth', detune: 5 },
+    portamento: 0.15,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 2500, q: 2, gain: 1 },
+    filterEnv: { amount: 3000, attack: 0.2, decay: 0.4, sustain: 0.6, release: 0.8 },
+    lfo: { wave: 'sine', rate: 2, depth: 200, target: 'filter' },
+    effects: { reverbWet: 0.35, delayTime: 0.3, delayFB: 0.25, chorusWet: 0.3, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'bright': {
+    osc: { type: 'sawtooth', detune: 0 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 6000, q: 3, gain: 2 },
+    filterEnv: { amount: 4000, attack: 0.001, decay: 0.3, sustain: 0.4, release: 0.5 },
+    lfo: { wave: 'sine', rate: 5, depth: 300, target: 'filter' },
+    effects: { reverbWet: 0.2, delayTime: 0.2, delayFB: 0.2, chorusWet: 0.3, dist: 0.1 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'mellow': {
+    osc: { type: 'triangle', detune: 3 },
+    portamento: 0.2,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 1800, q: 1.5, gain: 0 },
+    filterEnv: { amount: 2000, attack: 0.4, decay: 0.6, sustain: 0.7, release: 1.0 },
+    lfo: { wave: 'sine', rate: 1, depth: 150, target: 'filter' },
+    effects: { reverbWet: 0.4, delayTime: 0.35, delayFB: 0.25, chorusWet: 0.25, dist: 0 },
+    global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+  },
+  'crisp': {
+    osc: { type: 'square', detune: 0 },
+    portamento: 0,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 4000, q: 5, gain: 0 },
+    filterEnv: { amount: 5000, attack: 0.001, decay: 0.2, sustain: 0.3, release: 0.4 },
+    lfo: { wave: 'square', rate: 8, depth: 400, target: 'filter' },
+    effects: { reverbWet: 0.15, delayTime: 0.18, delayFB: 0.2, chorusWet: 0.2, dist: 0.2 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'smooth': {
+    osc: { type: 'sine', detune: 0 },
+    portamento: 0.3,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 3000, q: 2, gain: 0 },
+    filterEnv: { amount: 2500, attack: 0.5, decay: 0.7, sustain: 0.8, release: 1.2 },
+    lfo: { wave: 'sine', rate: 0.5, depth: 200, target: 'filter' },
     effects: { reverbWet: 0.5, delayTime: 0.4, delayFB: 0.3, chorusWet: 0.4, dist: 0 },
     global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
   },
-  'organ': {
+  'gritty': {
+    osc: { type: 'sawtooth', detune: 0 },
+    portamento: 0,
+    polyphony: 6,
+    filter: { type: 'lowpass', cutoff: 3000, q: 4, gain: 0 },
+    filterEnv: { amount: 4000, attack: 0.005, decay: 0.4, sustain: 0.5, release: 0.6 },
+    lfo: { wave: 'square', rate: 7, depth: 350, target: 'filter' },
+    effects: { reverbWet: 0.2, delayTime: 0.3, delayFB: 0.35, chorusWet: 0.2, dist: 0.6 },
+    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
+  },
+  'airy': {
+    osc: { type: 'sine', detune: 6 },
+    portamento: 0.4,
+    polyphony: 12,
+    filter: { type: 'highpass', cutoff: 500, q: 2, gain: 0 },
+    filterEnv: { amount: 2000, attack: 0.6, decay: 0.8, sustain: 0.7, release: 1.5 },
+    lfo: { wave: 'sine', rate: 0.4, depth: 250, target: 'filter' },
+    effects: { reverbWet: 0.65, delayTime: 0.5, delayFB: 0.3, chorusWet: 0.5, dist: 0 },
+    global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+  },
+  'punchy': {
+    osc: { type: 'square', detune: 0 },
+    portamento: 0,
+    polyphony: 4,
+    filter: { type: 'lowpass', cutoff: 3500, q: 6, gain: 0 },
+    filterEnv: { amount: 5000, attack: 0.001, decay: 0.2, sustain: 0.2, release: 0.3 },
+    lfo: { wave: 'square', rate: 12, depth: 600, target: 'filter' },
+    effects: { reverbWet: 0.1, delayTime: 0.12, delayFB: 0.15, chorusWet: 0, dist: 0.4 },
+    global: { masterVol: -8, pan: 0, transpose: 0, octave: 0 }
+  },
+  'dreamy': {
+    osc: { type: 'sawtooth', detune: 10 },
+    portamento: 0.5,
+    polyphony: 12,
+    filter: { type: 'lowpass', cutoff: 2200, q: 1.8, gain: 0 },
+    filterEnv: { amount: 1800, attack: 0.8, decay: 1.0, sustain: 0.75, release: 2.0 },
+    lfo: { wave: 'sine', rate: 0.6, depth: 350, target: 'filter' },
+    effects: { reverbWet: 0.6, delayTime: 0.55, delayFB: 0.4, chorusWet: 0.55, dist: 0 },
+    global: { masterVol: -12, pan: 0, transpose: 0, octave: 0 }
+  },
+  'metallic': {
     osc: { type: 'square', detune: 0 },
     portamento: 0,
     polyphony: 8,
-    filter: { type: 'lowpass', cutoff: 7000, q: 0.8, gain: 0 },
-    filterEnv: { amount: 0, attack: 0.001, decay: 0.001, sustain: 1.0, release: 0.4 },
-    lfo: { wave: 'sine', rate: 6, depth: 400, target: 'filter' },
-    effects: { reverbWet: 0.45, delayTime: 0.35, delayFB: 0.25, chorusWet: 0.35, dist: 0 },
+    filter: { type: 'bandpass', cutoff: 4000, q: 8, gain: 2 },
+    filterEnv: { amount: 3000, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.5 },
+    lfo: { wave: 'square', rate: 10, depth: 500, target: 'filter' },
+    effects: { reverbWet: 0.3, delayTime: 0.2, delayFB: 0.25, chorusWet: 0.3, dist: 0.2 },
     global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
   },
-  'bell': {
+  'woody': {
+    osc: { type: 'sawtooth', detune: 4 },
+    portamento: 0.1,
+    polyphony: 8,
+    filter: { type: 'lowpass', cutoff: 2000, q: 2.5, gain: 0 },
+    filterEnv: { amount: 3000, attack: 0.05, decay: 0.5, sustain: 0.4, release: 1.0 },
+    lfo: { wave: 'sine', rate: 1.5, depth: 180, target: 'filter' },
+    effects: { reverbWet: 0.3, delayTime: 0.3, delayFB: 0.2, chorusWet: 0.2, dist: 0 },
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
+  },
+  'glassy': {
     osc: { type: 'sine', detune: 0 },
     portamento: 0,
     polyphony: 8,
@@ -692,7 +692,7 @@ const presets = {
     filterEnv: { amount: 3000, attack: 0.001, decay: 0.05, sustain: 0.0, release: 2.5 },
     lfo: { wave: 'sine', rate: 0.3, depth: 0, target: 'filter' },
     effects: { reverbWet: 0.55, delayTime: 0.15, delayFB: 0.1, chorusWet: 0.12, dist: 0 },
-    global: { masterVol: -10, pan: 0, transpose: 0 }
+    global: { masterVol: -10, pan: 0, transpose: 0, octave: 0 }
   }
 };
 

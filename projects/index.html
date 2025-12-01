@@ -61,6 +61,18 @@
   #eq-canvas { width:100%; height:120px; background:rgba(0,0,0,0.3); border-radius:4px; display:block; }
   .eq-label { font-size:10px; color:#888; margin-top:4px; display:flex; justify-content:space-between; }
 
+  /* VJ Shader Canvas */
+  #vj-canvas { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:3; pointer-events:none; background:transparent; display:block; opacity:1; }
+  #vj-controls { position:absolute; left:16px; bottom:80px; background:rgba(0,0,0,0.75); padding:14px; border-radius:8px; z-index:80; min-width:280px; max-height:70vh; overflow-y:auto; }
+  .vj-control-row { display:flex; align-items:center; gap:8px; margin:8px 0; }
+  .vj-control-row label { font-size:11px; color:#bfbfbf; width:100px; }
+  .vj-toggle { background:#4caf50; border:none; color:white; padding:8px 16px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; width:100%; margin-top:8px; }
+  .vj-toggle.active { background:#2e7d32; }
+  .vj-toggle:disabled { background:#444; cursor:not-allowed; }
+  .chord-display { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.3); padding:8px; border-radius:6px; margin:8px 0; font-size:11px; }
+  .chord-name { font-weight:bold; color:#4caf50; font-size:13px; }
+  .chord-notes { color:#aaa; font-size:10px; margin-top:4px; }
+
   /* Responsive */
   @media (max-width:900px) {
     #panel { width:320px; right:8px; top:80px; bottom:8px; }
@@ -494,6 +506,69 @@
 
   <div id="active-notes"></div>
 
+  <!-- VJ Shader Canvas -->
+  <canvas id="vj-canvas"></canvas>
+
+  <!-- VJ Controls -->
+  <div id="vj-controls">
+    <div class="hint"><strong>VJ Shader System</strong></div>
+    
+    <div class="chord-display">
+      <div class="chord-name" id="current-chord">No Chord</div>
+      <div class="chord-notes" id="chord-notes">Press keys to detect chord</div>
+    </div>
+
+    <div class="vj-control-row">
+      <label>Shader</label>
+      <select id="vj-shader" style="background:#111;color:#fff;padding:6px;border-radius:6px;flex:1;">
+        <option value="audio-reactive">Audio Reactive</option>
+        <option value="chord-colors">Chord Colors</option>
+        <option value="frequency-waves">Frequency Waves</option>
+        <option value="chord-shapes">Chord Shapes</option>
+        <option value="kaleidoscope">Kaleidoscope</option>
+        <option value="particles">Particle Field</option>
+        <option value="voronoi">Voronoi Cells</option>
+        <option value="fluid">Fluid Dynamics</option>
+      </select>
+    </div>
+
+    <div class="vj-control-row">
+      <label>Intensity</label>
+      <input id="vj-intensity" type="range" min="0" max="2" step="0.1" value="1" style="flex:1;">
+      <span id="vj-intensity-val" style="width:40px;text-align:right;color:#bdbdbd;font-size:11px;">1.0</span>
+    </div>
+
+    <div class="vj-control-row">
+      <label>Speed</label>
+      <input id="vj-speed" type="range" min="0.1" max="3" step="0.1" value="1" style="flex:1;">
+      <span id="vj-speed-val" style="width:40px;text-align:right;color:#bdbdbd;font-size:11px;">1.0</span>
+    </div>
+
+    <div class="vj-control-row">
+      <label>Color Speed</label>
+      <input id="vj-color-speed" type="range" min="0" max="2" step="0.1" value="0.5" style="flex:1;">
+      <span id="vj-color-speed-val" style="width:40px;text-align:right;color:#bdbdbd;font-size:11px;">0.5</span>
+    </div>
+
+    <div class="vj-control-row">
+      <label>Scale</label>
+      <input id="vj-scale" type="range" min="0.5" max="3" step="0.1" value="1" style="flex:1;">
+      <span id="vj-scale-val" style="width:40px;text-align:right;color:#bdbdbd;font-size:11px;">1.0</span>
+    </div>
+
+    <div class="vj-control-row">
+      <label>Blend Mode</label>
+      <select id="vj-blend" style="background:#111;color:#fff;padding:6px;border-radius:6px;flex:1;">
+        <option value="normal">Normal</option>
+        <option value="add">Add</option>
+        <option value="multiply">Multiply</option>
+        <option value="screen">Screen</option>
+      </select>
+    </div>
+
+    <button id="vj-toggle" class="vj-toggle" disabled>Enable VJ (Start Audio First)</button>
+  </div>
+
   <div id="stored-notes">
     <div class="hint"><strong>Stored Notes</strong> <span style="font-size:10px;color:#888">(Press / to record, Space to play)</span></div>
     <div id="stored-notes-list" style="margin-top:8px;min-height:20px;">
@@ -519,6 +594,19 @@ let lfo;
 let reverb, delay, chorus, distortion;
 let effectsChainOut; // final node before master
 let analyser; // for EQ visualization
+
+// VJ Shader System
+let vjGl, vjProgram, vjCanvas, vjUniforms;
+let vjEnabled = false;
+let vjShaderType = 'audio-reactive';
+let vjIntensity = 1.0;
+let vjSpeed = 1.0;
+let vjColorSpeed = 0.5;
+let vjScale = 1.0;
+let vjBlendMode = 'normal';
+let vjTime = 0;
+let currentChord = null;
+let chordNotes = [];
 
 // Config state (keeps in sync with UI)
 const state = {
@@ -748,6 +836,14 @@ document.getElementById('start-button').addEventListener('click', async () => {
   await initSynthAudio();
   document.getElementById('start-wrapper').style.display = 'none';
   initialized = true;
+  
+  // Enable VJ button
+  const vjToggle = document.getElementById('vj-toggle');
+  if (vjToggle) {
+    vjToggle.disabled = false;
+    vjToggle.textContent = 'Enable VJ';
+  }
+  wireVJControls();
 });
 
 // Build and (re)create the synth and audio graph
@@ -821,6 +917,9 @@ async function initSynthAudio() {
   
   // Start EQ visualization
   startEQVisualization();
+  
+  // Initialize VJ shader system
+  initVJSystem();
 }
 
 // Helper to create PolySynth with current state
@@ -1630,6 +1729,787 @@ function startEQVisualization() {
   draw();
 }
 
+/* ============================
+   VJ Shader System (TouchDesigner-like)
+   ============================ */
+
+// Vertex shader (simple passthrough)
+const vjVertexShader = `
+  attribute vec2 a_position;
+  varying vec2 v_uv;
+  
+  void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0);
+    v_uv = (a_position + 1.0) * 0.5;
+    v_uv.y = 1.0 - v_uv.y; // Flip Y
+  }
+`;
+
+// Fragment shader templates (ISF-like)
+const vjShaders = {
+  'audio-reactive': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = (v_uv - 0.5) * u_scale;
+      float dist = length(uv);
+      
+      // Audio-reactive waves
+      float wave1 = sin(dist * 10.0 - u_time * u_speed * 2.0) * u_bass;
+      float wave2 = sin(dist * 15.0 - u_time * u_speed * 3.0) * u_mid;
+      float wave3 = sin(dist * 20.0 - u_time * u_speed * 4.0) * u_treble;
+      
+      float pattern = (wave1 + wave2 + wave3) * u_intensity;
+      
+      // Color from chord + audio
+      vec3 color = u_chordColor * (0.5 + pattern * 0.5);
+      color += vec3(wave1 * 0.3, wave2 * 0.3, wave3 * 0.3);
+      
+      // Add pulsing effect
+      float pulse = sin(u_time * u_speed) * 0.1 + 0.9;
+      color *= pulse * u_avgAmp;
+      
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+  
+  'chord-colors': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    uniform int u_chordRoot;
+    uniform int u_chordType;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = v_uv * u_scale;
+      
+      // Create radial gradient based on chord
+      vec2 center = vec2(0.5, 0.5);
+      float dist = distance(uv, center);
+      
+      // Chord-based color modulation
+      float hueShift = float(u_chordRoot) / 12.0;
+      vec3 baseColor = u_chordColor;
+      
+      // Add frequency-based rings
+      float ring1 = step(0.3, dist) * step(dist, 0.3 + u_bass * 0.2);
+      float ring2 = step(0.5, dist) * step(dist, 0.5 + u_mid * 0.2);
+      float ring3 = step(0.7, dist) * step(dist, 0.7 + u_treble * 0.2);
+      
+      vec3 color = baseColor;
+      color += ring1 * vec3(1.0, 0.5, 0.0) * u_bass;
+      color += ring2 * vec3(0.0, 1.0, 0.5) * u_mid;
+      color += ring3 * vec3(0.5, 0.0, 1.0) * u_treble;
+      
+      // Rotating pattern
+      float angle = atan(uv.y - 0.5, uv.x - 0.5) + u_time * u_speed;
+      float spiral = sin(angle * 3.0 + dist * 10.0) * 0.5 + 0.5;
+      color *= (0.7 + spiral * 0.3);
+      
+      gl_FragColor = vec4(color * u_intensity * u_avgAmp, 1.0);
+    }
+  `,
+  
+  'frequency-waves': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = v_uv;
+      
+      // Multiple frequency bands as waves
+      float wave1 = sin(uv.x * 10.0 + u_time * u_speed) * u_bass;
+      float wave2 = sin(uv.x * 20.0 + u_time * u_speed * 1.5) * u_mid;
+      float wave3 = sin(uv.x * 30.0 + u_time * u_speed * 2.0) * u_treble;
+      
+      float combined = (wave1 + wave2 + wave3) * 0.33;
+      
+      // Vertical position based on frequency
+      float y1 = 0.2 + wave1 * 0.1;
+      float y2 = 0.5 + wave2 * 0.1;
+      float y3 = 0.8 + wave3 * 0.1;
+      
+      // Color bands
+      vec3 color = vec3(0.0);
+      float dist1 = abs(uv.y - y1);
+      float dist2 = abs(uv.y - y2);
+      float dist3 = abs(uv.y - y3);
+      
+      color += exp(-dist1 * 50.0) * vec3(1.0, 0.3, 0.0) * u_bass;
+      color += exp(-dist2 * 50.0) * vec3(0.0, 1.0, 0.3) * u_mid;
+      color += exp(-dist3 * 50.0) * vec3(0.3, 0.0, 1.0) * u_treble;
+      
+      // Add chord color overlay
+      color = mix(color, u_chordColor, 0.3);
+      
+      gl_FragColor = vec4(color * u_intensity * u_avgAmp, 1.0);
+    }
+  `,
+  
+  'chord-shapes': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    uniform int u_chordRoot;
+    uniform int u_chordType;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = (v_uv - 0.5) * 2.0 * u_scale;
+      
+      // Number of sides based on chord type
+      float sides = float(u_chordType == 0 ? 3 : u_chordType == 1 ? 4 : u_chordType == 2 ? 5 : 6);
+      
+      // Create polygon shape
+      float angle = atan(uv.y, uv.x);
+      float radius = length(uv);
+      float segment = 6.28318 / sides;
+      float d = cos(floor(0.5 + angle / segment) * segment - angle) * radius;
+      
+      // Shape with audio-reactive edges
+      float shape = smoothstep(0.3 + u_bass * 0.2, 0.3, d);
+      
+      // Rotate based on chord root
+      float rotation = float(u_chordRoot) * 0.5236; // 30 degrees per semitone
+      vec2 rotated = vec2(
+        uv.x * cos(rotation + u_time * u_speed) - uv.y * sin(rotation + u_time * u_speed),
+        uv.x * sin(rotation + u_time * u_speed) + uv.y * cos(rotation + u_time * u_speed)
+      );
+      
+      // Add frequency-based layers
+      float layer1 = shape * u_bass;
+      float layer2 = shape * u_mid * 0.8;
+      float layer3 = shape * u_treble * 0.6;
+      
+      vec3 color = u_chordColor * (layer1 + layer2 + layer3);
+      
+      // Add pulsing
+      float pulse = sin(u_time * u_speed * 2.0) * 0.2 + 0.8;
+      color *= pulse;
+      
+      gl_FragColor = vec4(color * u_intensity * u_avgAmp, 1.0);
+    }
+  `,
+  
+  'kaleidoscope': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = (v_uv - 0.5) * 2.0;
+      float angle = atan(uv.y, uv.x);
+      float radius = length(uv);
+      
+      // Mirror into segments (kaleidoscope effect)
+      float segments = 8.0 + u_bass * 4.0;
+      angle = mod(angle, 6.28318 / segments) * segments;
+      
+      vec2 mirrored = vec2(cos(angle), sin(angle)) * radius;
+      
+      // Create pattern
+      float pattern = sin(mirrored.x * 10.0 + u_time * u_speed) * 
+                      sin(mirrored.y * 10.0 + u_time * u_speed * 1.3);
+      
+      // Frequency-based color bands
+      vec3 color = u_chordColor;
+      color += vec3(pattern * u_bass, pattern * u_mid, pattern * u_treble);
+      
+      // Radial gradient
+      float radial = 1.0 - smoothstep(0.0, 1.5, radius);
+      color *= radial;
+      
+      gl_FragColor = vec4(color * u_intensity * u_avgAmp, 1.0);
+    }
+  `,
+  
+  'particles': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = v_uv;
+      
+      // Particle grid
+      vec2 grid = floor(uv * 20.0);
+      vec2 cell = fract(uv * 20.0) - 0.5;
+      
+      // Random movement based on audio
+      float id = grid.x + grid.y * 20.0;
+      float random = fract(sin(id) * 43758.5453);
+      
+      vec2 offset = vec2(
+        sin(u_time * u_speed + random * 6.28) * u_bass,
+        cos(u_time * u_speed + random * 6.28) * u_mid
+      ) * 0.3;
+      
+      float dist = length(cell - offset);
+      float particle = smoothstep(0.1, 0.0, dist);
+      
+      // Color based on frequency
+      vec3 color = u_chordColor;
+      if (random < 0.33) color *= u_bass;
+      else if (random < 0.66) color *= u_mid;
+      else color *= u_treble;
+      
+      gl_FragColor = vec4(color * particle * u_intensity * u_avgAmp, 1.0);
+    }
+  `,
+  
+  'voronoi': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = v_uv * 10.0;
+      
+      // Voronoi cells
+      vec2 i = floor(uv);
+      vec2 f = fract(uv);
+      
+      float minDist = 1.0;
+      vec2 closest;
+      
+      for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+          vec2 neighbor = vec2(float(x), float(y));
+          vec2 point = neighbor + sin(i + neighbor + u_time * u_speed) * 0.5;
+          float dist = length(f - point);
+          
+          if (dist < minDist) {
+            minDist = dist;
+            closest = i + neighbor;
+          }
+        }
+      }
+      
+      // Color cells based on audio
+      float cellId = closest.x + closest.y * 10.0;
+      vec3 color = u_chordColor;
+      color += vec3(
+        sin(cellId + u_time * u_speed) * u_bass,
+        sin(cellId + u_time * u_speed + 2.0) * u_mid,
+        sin(cellId + u_time * u_speed + 4.0) * u_treble
+      ) * 0.3;
+      
+      // Edge detection
+      float edge = smoothstep(0.0, 0.1, minDist);
+      color *= edge;
+      
+      gl_FragColor = vec4(color * u_intensity * u_avgAmp, 1.0);
+    }
+  `,
+  
+  'fluid': `
+    precision highp float;
+    uniform float u_time;
+    uniform vec2 u_resolution;
+    uniform float u_intensity;
+    uniform float u_speed;
+    uniform float u_scale;
+    uniform vec3 u_chordColor;
+    uniform float u_bass;
+    uniform float u_mid;
+    uniform float u_treble;
+    uniform float u_avgAmp;
+    varying vec2 v_uv;
+    
+    void main() {
+      vec2 uv = v_uv;
+      
+      // Fluid-like flow
+      vec2 flow = vec2(
+        sin(uv.y * 5.0 + u_time * u_speed) * u_bass,
+        cos(uv.x * 5.0 + u_time * u_speed) * u_mid
+      );
+      
+      vec2 distorted = uv + flow * 0.1;
+      
+      // Multiple layers
+      float layer1 = sin(distorted.x * 10.0 + u_time * u_speed) * u_bass;
+      float layer2 = sin(distorted.y * 10.0 + u_time * u_speed * 1.3) * u_mid;
+      float layer3 = sin((distorted.x + distorted.y) * 10.0 + u_time * u_speed * 1.7) * u_treble;
+      
+      float pattern = (layer1 + layer2 + layer3) * 0.33;
+      
+      // Color mixing
+      vec3 color = u_chordColor;
+      color += vec3(layer1 * 0.3, layer2 * 0.3, layer3 * 0.3);
+      
+      // Add turbulence
+      float turbulence = sin(uv.x * 20.0 + u_time * u_speed) * 
+                         sin(uv.y * 20.0 + u_time * u_speed) * 0.1;
+      color += turbulence;
+      
+      gl_FragColor = vec4(color * u_intensity * u_avgAmp, 1.0);
+    }
+  `
+};
+
+// Chord detection
+function detectChord(activeMidiSet) {
+  if (!activeMidiSet || activeMidiSet.size < 2) return null;
+  
+  const notes = Array.from(activeMidiSet).sort((a, b) => a - b);
+  
+  // Normalize notes to single octave (0-11)
+  const normalizedNotes = notes.map(n => n % 12);
+  const uniqueNotes = [...new Set(normalizedNotes)].sort((a, b) => a - b);
+  
+  // Common chord patterns (as sets of intervals from root)
+  const chordPatterns = {
+    'major': [0, 4, 7],
+    'minor': [0, 3, 7],
+    'diminished': [0, 3, 6],
+    'augmented': [0, 4, 8],
+    'sus2': [0, 2, 7],
+    'sus4': [0, 5, 7],
+    'major7': [0, 4, 7, 11],
+    'minor7': [0, 3, 7, 10],
+    'dominant7': [0, 4, 7, 10]
+  };
+  
+  // Try each note as a potential root
+  let bestMatch = null;
+  let bestScore = 0;
+  
+  for (let rootIdx = 0; rootIdx < uniqueNotes.length; rootIdx++) {
+    const root = uniqueNotes[rootIdx];
+    const intervalsFromRoot = uniqueNotes.map(n => (n - root + 12) % 12).sort((a, b) => a - b);
+    
+    // Check against each chord pattern
+    for (const [name, pattern] of Object.entries(chordPatterns)) {
+      // Check if all pattern intervals are present (allowing for extra notes)
+      const patternSet = new Set(pattern);
+      const intervalsSet = new Set(intervalsFromRoot);
+      
+      // Count how many pattern intervals are present
+      let matches = 0;
+      for (const interval of pattern) {
+        if (intervalsSet.has(interval)) matches++;
+      }
+      
+      // For a good match, we need at least 2 intervals for 2-note chords,
+      // or pattern.length - 1 for 3+ note chords
+      const minRequired = pattern.length === 2 ? 2 : Math.max(2, pattern.length - 1);
+      
+      if (matches >= minRequired && matches > bestScore) {
+        bestScore = matches;
+        bestMatch = {
+          root: root,
+          type: name,
+          rootName: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][root],
+          notes: notes
+        };
+      }
+    }
+  }
+  
+  return bestMatch;
+}
+
+// Convert chord to color
+function chordToColor(chord) {
+  if (!chord) return [0.5, 0.5, 0.5];
+  
+  const root = chord.root;
+  const hue = (root / 12.0) * 360.0;
+  
+  // Saturation based on chord type
+  let sat = 0.7;
+  if (chord.type.includes('minor')) sat = 0.6;
+  if (chord.type.includes('dim')) sat = 0.5;
+  if (chord.type.includes('aug')) sat = 0.9;
+  
+  // Convert HSL to RGB
+  const h = hue / 360.0;
+  const s = sat;
+  const l = 0.5;
+  
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h * 6) % 2 - 1));
+  const m = l - c / 2;
+  
+  let r, g, b;
+  if (h < 1/6) { r = c; g = x; b = 0; }
+  else if (h < 2/6) { r = x; g = c; b = 0; }
+  else if (h < 3/6) { r = 0; g = c; b = x; }
+  else if (h < 4/6) { r = 0; g = x; b = c; }
+  else if (h < 5/6) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  
+  return [r + m, g + m, b + m];
+}
+
+// Initialize WebGL
+function initVJSystem() {
+  vjCanvas = document.getElementById('vj-canvas');
+  if (!vjCanvas) return;
+  
+  vjGl = vjCanvas.getContext('webgl', { 
+    alpha: true, 
+    premultipliedAlpha: false,
+    antialias: true 
+  }) || vjCanvas.getContext('experimental-webgl');
+  
+  if (!vjGl) {
+    console.warn('WebGL not supported');
+    return;
+  }
+  
+  // Set clear color
+  vjGl.clearColor(0.0, 0.0, 0.0, 1.0);
+  
+  // Set canvas size
+  vjCanvas.width = window.innerWidth;
+  vjCanvas.height = window.innerHeight;
+  vjCanvas.style.width = window.innerWidth + 'px';
+  vjCanvas.style.height = window.innerHeight + 'px';
+  vjGl.viewport(0, 0, vjCanvas.width, vjCanvas.height);
+  
+  // Make sure canvas is visible
+  vjCanvas.style.display = 'block';
+  vjCanvas.style.visibility = 'visible';
+  
+  // Create shader program
+  compileShader('audio-reactive');
+  
+  // Handle resize
+  window.addEventListener('resize', () => {
+    vjCanvas.width = window.innerWidth;
+    vjCanvas.height = window.innerHeight;
+    vjGl.viewport(0, 0, vjCanvas.width, vjCanvas.height);
+  });
+  
+  // Start render loop
+  vjRenderLoop();
+}
+
+function compileShader(shaderName) {
+  if (!vjGl) return;
+  
+  const fragmentSource = vjShaders[shaderName];
+  if (!fragmentSource) return;
+  
+  // Compile vertex shader
+  const vertexShader = vjGl.createShader(vjGl.VERTEX_SHADER);
+  vjGl.shaderSource(vertexShader, vjVertexShader);
+  vjGl.compileShader(vertexShader);
+  if (!vjGl.getShaderParameter(vertexShader, vjGl.COMPILE_STATUS)) {
+    console.error('Vertex shader error:', vjGl.getShaderInfoLog(vertexShader));
+    return;
+  }
+  
+  // Compile fragment shader
+  const fragShader = vjGl.createShader(vjGl.FRAGMENT_SHADER);
+  vjGl.shaderSource(fragShader, fragmentSource);
+  vjGl.compileShader(fragShader);
+  if (!vjGl.getShaderParameter(fragShader, vjGl.COMPILE_STATUS)) {
+    console.error('Fragment shader error:', vjGl.getShaderInfoLog(fragShader));
+    return;
+  }
+  
+  // Create program
+  vjProgram = vjGl.createProgram();
+  vjGl.attachShader(vjProgram, vertexShader);
+  vjGl.attachShader(vjProgram, fragShader);
+  vjGl.linkProgram(vjProgram);
+  
+  if (!vjGl.getProgramParameter(vjProgram, vjGl.LINK_STATUS)) {
+    console.error('Program link error:', vjGl.getProgramInfoLog(vjProgram));
+    return;
+  }
+  
+  // Get attribute and uniform locations
+  const positionLocation = vjGl.getAttribLocation(vjProgram, 'a_position');
+  
+  // Create quad
+  const buffer = vjGl.createBuffer();
+  vjGl.bindBuffer(vjGl.ARRAY_BUFFER, buffer);
+  vjGl.bufferData(vjGl.ARRAY_BUFFER, new Float32Array([
+    -1, -1,
+     1, -1,
+    -1,  1,
+    -1,  1,
+     1, -1,
+     1,  1
+  ]), vjGl.STATIC_DRAW);
+  
+  // Store uniform locations
+  vjUniforms = {
+    time: vjGl.getUniformLocation(vjProgram, 'u_time'),
+    resolution: vjGl.getUniformLocation(vjProgram, 'u_resolution'),
+    intensity: vjGl.getUniformLocation(vjProgram, 'u_intensity'),
+    speed: vjGl.getUniformLocation(vjProgram, 'u_speed'),
+    scale: vjGl.getUniformLocation(vjProgram, 'u_scale'),
+    chordColor: vjGl.getUniformLocation(vjProgram, 'u_chordColor'),
+    bass: vjGl.getUniformLocation(vjProgram, 'u_bass'),
+    mid: vjGl.getUniformLocation(vjProgram, 'u_mid'),
+    treble: vjGl.getUniformLocation(vjProgram, 'u_treble'),
+    avgAmp: vjGl.getUniformLocation(vjProgram, 'u_avgAmp'),
+    chordRoot: vjGl.getUniformLocation(vjProgram, 'u_chordRoot'),
+    chordType: vjGl.getUniformLocation(vjProgram, 'u_chordType')
+  };
+  
+  vjGl.positionLocation = positionLocation;
+  vjGl.buffer = buffer;
+}
+
+function vjRenderLoop() {
+  if (!vjGl || !vjProgram) {
+    requestAnimationFrame(vjRenderLoop);
+    return;
+  }
+  
+  // Always render when enabled (even without audio for testing)
+  if (vjEnabled) {
+    // Use analyser if available, otherwise use default values
+    let freqData = null;
+    if (analyser && initialized) {
+      freqData = analyser.getValue();
+    } else {
+      // Create dummy data for testing - animated pattern
+      freqData = new Float32Array(1024);
+      const time = Date.now() * 0.001;
+      for (let i = 0; i < 1024; i++) {
+        freqData[i] = (Math.sin(i * 0.1 + time) * 50 + 100) * 0.5;
+      }
+    }
+    // Calculate frequency bands
+    const bassEnd = Math.floor(freqData.length * 0.1);
+    const midEnd = Math.floor(freqData.length * 0.5);
+    
+    let bass = 0, mid = 0, treble = 0, avgAmp = 0;
+    for (let i = 0; i < freqData.length; i++) {
+      const amp = Math.abs(freqData[i]);
+      avgAmp += amp;
+      if (i < bassEnd) bass += amp;
+      else if (i < midEnd) mid += amp;
+      else treble += amp;
+    }
+    
+    // Avoid division by zero
+    bass = bassEnd > 0 ? (bass / bassEnd) / 255.0 : 0.2; // Default values for visibility
+    mid = (midEnd - bassEnd) > 0 ? (mid / (midEnd - bassEnd)) / 255.0 : 0.2;
+    treble = (freqData.length - midEnd) > 0 ? (treble / (freqData.length - midEnd)) / 255.0 : 0.2;
+    avgAmp = freqData.length > 0 ? Math.max((avgAmp / freqData.length) / 255.0, 0.3) : 0.5; // Ensure minimum visibility
+    
+    // Detect chord
+    currentChord = detectChord(activeMidiNotes);
+    const chordColor = chordToColor(currentChord);
+    
+    // Update chord display
+    const chordDisplay = document.getElementById('current-chord');
+    const chordNotesDisplay = document.getElementById('chord-notes');
+    
+    if (chordDisplay && chordNotesDisplay) {
+      if (currentChord) {
+        chordDisplay.textContent = 
+          currentChord.rootName + (currentChord.type === 'major' ? '' : ' ' + currentChord.type);
+        chordNotesDisplay.textContent = 
+          currentChord.notes.map(n => Tone.Frequency(n, 'midi').toNote()).join(' ');
+      } else {
+        const noteCount = activeMidiNotes ? activeMidiNotes.size : 0;
+        if (noteCount >= 2) {
+          chordDisplay.textContent = 'No Chord Detected';
+          chordNotesDisplay.textContent = 'Notes: ' + Array.from(activeMidiNotes).map(n => Tone.Frequency(n, 'midi').toNote()).join(' ');
+        } else {
+          chordDisplay.textContent = 'No Chord';
+          chordNotesDisplay.textContent = 'Press 2+ keys to detect chord';
+        }
+      }
+    }
+    
+    // Update time (always increment for animation)
+    vjTime += 0.016 * vjSpeed;
+    
+    // Debug: Log rendering state occasionally
+    if (Math.floor(vjTime * 10) % 60 === 0) {
+      console.log('VJ Rendering:', { vjEnabled, initialized, hasAnalyser: !!analyser, bass, mid, treble, avgAmp, chord: currentChord?.rootName });
+    }
+    
+    // Render
+    vjGl.useProgram(vjProgram);
+    
+    // Clear canvas
+    vjGl.clearColor(0.0, 0.0, 0.0, 1.0);
+    vjGl.clear(vjGl.COLOR_BUFFER_BIT);
+    
+    // Enable blending
+    vjGl.enable(vjGl.BLEND);
+    
+    // Set blend mode
+    if (vjBlendMode === 'add') {
+      vjGl.blendFunc(vjGl.SRC_ALPHA, vjGl.ONE);
+    } else if (vjBlendMode === 'multiply') {
+      vjGl.blendFunc(vjGl.DST_COLOR, vjGl.ZERO);
+    } else if (vjBlendMode === 'screen') {
+      vjGl.blendFunc(vjGl.ONE, vjGl.ONE_MINUS_SRC_COLOR);
+    } else {
+      vjGl.blendFunc(vjGl.SRC_ALPHA, vjGl.ONE_MINUS_SRC_ALPHA);
+    }
+    
+    // Set uniforms
+    vjGl.uniform1f(vjUniforms.time, vjTime);
+    vjGl.uniform2f(vjUniforms.resolution, vjCanvas.width, vjCanvas.height);
+    vjGl.uniform1f(vjUniforms.intensity, vjIntensity);
+    vjGl.uniform1f(vjUniforms.speed, vjSpeed);
+    vjGl.uniform1f(vjUniforms.scale, vjScale);
+    vjGl.uniform3f(vjUniforms.chordColor, chordColor[0], chordColor[1], chordColor[2]);
+    vjGl.uniform1f(vjUniforms.bass, bass);
+    vjGl.uniform1f(vjUniforms.mid, mid);
+    vjGl.uniform1f(vjUniforms.treble, treble);
+    vjGl.uniform1f(vjUniforms.avgAmp, avgAmp);
+    
+    if (vjUniforms.chordRoot) {
+      vjGl.uniform1i(vjUniforms.chordRoot, currentChord ? currentChord.root : 0);
+    }
+    if (vjUniforms.chordType) {
+      const typeMap = { 'major': 0, 'minor': 1, 'diminished': 2, 'augmented': 3, 'sus2': 4, 'sus4': 5 };
+      vjGl.uniform1i(vjUniforms.chordType, currentChord ? (typeMap[currentChord.type] || 0) : 0);
+    }
+    
+    // Draw
+    if (vjGl.positionLocation !== undefined && vjGl.buffer) {
+      vjGl.enableVertexAttribArray(vjGl.positionLocation);
+      vjGl.bindBuffer(vjGl.ARRAY_BUFFER, vjGl.buffer);
+      vjGl.vertexAttribPointer(vjGl.positionLocation, 2, vjGl.FLOAT, false, 0, 0);
+      vjGl.drawArrays(vjGl.TRIANGLES, 0, 6);
+    }
+  }
+  
+  requestAnimationFrame(vjRenderLoop);
+}
+
+// Wire up VJ controls (only call once to avoid duplicate listeners)
+let vjControlsWired = false;
+function wireVJControls() {
+  if (vjControlsWired) return; // Prevent duplicate event listeners
+  vjControlsWired = true;
+  
+  const $ = (id) => document.getElementById(id);
+  
+  $('vj-shader')?.addEventListener('change', (e) => {
+    vjShaderType = e.target.value;
+    compileShader(vjShaderType);
+  });
+  
+  $('vj-intensity')?.addEventListener('input', (e) => {
+    vjIntensity = Number(e.target.value);
+    $('vj-intensity-val').textContent = vjIntensity.toFixed(1);
+  });
+  
+  $('vj-speed')?.addEventListener('input', (e) => {
+    vjSpeed = Number(e.target.value);
+    $('vj-speed-val').textContent = vjSpeed.toFixed(1);
+  });
+  
+  $('vj-color-speed')?.addEventListener('input', (e) => {
+    vjColorSpeed = Number(e.target.value);
+    $('vj-color-speed-val').textContent = vjColorSpeed.toFixed(1);
+  });
+  
+  $('vj-scale')?.addEventListener('input', (e) => {
+    vjScale = Number(e.target.value);
+    $('vj-scale-val').textContent = vjScale.toFixed(1);
+  });
+  
+  $('vj-blend')?.addEventListener('change', (e) => {
+    vjBlendMode = e.target.value;
+  });
+  
+  // Enable VJ button - use once flag to prevent duplicate handlers
+  const toggleBtn = $('vj-toggle');
+  if (toggleBtn && !toggleBtn.dataset.listenerAttached) {
+    toggleBtn.dataset.listenerAttached = 'true';
+    toggleBtn.addEventListener('click', () => {
+      vjEnabled = !vjEnabled;
+      toggleBtn.textContent = vjEnabled ? 'Disable VJ' : 'Enable VJ';
+      toggleBtn.classList.toggle('active', vjEnabled);
+      
+      // Keep controls visible
+      if ($('vj-controls')) {
+        $('vj-controls').style.display = 'block';
+      }
+      // Make canvas visible when enabled
+      if (vjCanvas) {
+        vjCanvas.style.display = vjEnabled ? 'block' : 'none';
+        vjCanvas.style.visibility = vjEnabled ? 'visible' : 'hidden';
+      }
+      console.log('VJ enabled:', vjEnabled, 'Canvas:', vjCanvas);
+    });
+  }
+}
+
+// Wire VJ controls - will be called after audio starts
+// Don't call here to avoid duplicate event listeners
 
 // Reconnect everything when page unload or when user changes settings drastically
 window.addEventListener('beforeunload', () => {

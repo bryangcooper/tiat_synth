@@ -3,10 +3,64 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Full Synth Panel — Single File</title>
+<title>Synthviz</title>
 
 <!-- Tone.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<!-- Hydra - try multiple CDNs -->
+<script>
+  // Try to load Hydra from multiple CDNs
+  window.loadHydra = function() {
+    // Check if already loaded
+    if (typeof Hydra !== 'undefined' || typeof window.Hydra !== 'undefined') {
+      console.log('Hydra already loaded');
+      return;
+    }
+    
+    // Try jsdelivr first
+    const script1 = document.createElement('script');
+    script1.src = 'https://cdn.jsdelivr.net/npm/hydra-synth@latest/dist/hydra-synth.js';
+    script1.onload = () => {
+      console.log('Hydra script loaded from jsdelivr');
+      // Check if Hydra is now available (might take a moment)
+      setTimeout(() => {
+        if (typeof Hydra !== 'undefined') {
+          window.Hydra = Hydra;
+          console.log('Hydra class available');
+        } else {
+          console.warn('Hydra script loaded but class not found');
+        }
+      }, 100);
+    };
+    script1.onerror = () => {
+      console.warn('jsdelivr failed, trying unpkg...');
+      // Fallback to unpkg
+      const script2 = document.createElement('script');
+      script2.src = 'https://unpkg.com/hydra-synth@latest/dist/hydra-synth.js';
+      script2.onload = () => {
+        console.log('Hydra script loaded from unpkg');
+        setTimeout(() => {
+          if (typeof Hydra !== 'undefined') {
+            window.Hydra = Hydra;
+            console.log('Hydra class available');
+          }
+        }, 100);
+      };
+      script2.onerror = () => {
+        console.error('Failed to load Hydra from all CDNs');
+      };
+      document.head.appendChild(script2);
+    };
+    document.head.appendChild(script1);
+  };
+  
+  // Load Hydra when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.loadHydra);
+  } else {
+    window.loadHydra();
+  }
+</script>
 
 <style>
   /* Basic app look */
@@ -64,6 +118,15 @@
   /* VJ Shader Canvas */
   #vj-canvas { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:3; pointer-events:none; background:transparent; display:block; opacity:1; }
   #vj-controls { position:absolute; left:16px; bottom:80px; background:rgba(0,0,0,0.75); padding:14px; border-radius:8px; z-index:80; min-width:280px; max-height:70vh; overflow-y:auto; }
+  #vj-shader-editor { display:none; margin-top:12px; }
+  #vj-shader-code { width:100%; min-height:200px; background:#1a1a1a; color:#0f0; font-family:'Courier New', monospace; font-size:11px; padding:8px; border:1px solid #333; border-radius:4px; resize:vertical; }
+  .vj-editor-controls { display:flex; gap:8px; margin-top:8px; }
+  .vj-btn { background:#4caf50; border:none; color:white; padding:6px 12px; border-radius:4px; font-size:11px; cursor:pointer; }
+  .vj-btn:hover { background:#45a049; }
+  .vj-btn-secondary { background:#666; }
+  .vj-btn-secondary:hover { background:#777; }
+  .shader-error { background:rgba(200,0,0,0.2); border:1px solid #c00; color:#f88; padding:8px; border-radius:4px; margin-top:8px; font-size:10px; font-family:monospace; display:none; }
+  .shader-success { background:rgba(0,200,0,0.2); border:1px solid #0c0; color:#8f8; padding:8px; border-radius:4px; margin-top:8px; font-size:10px; display:none; }
   .vj-control-row { display:flex; align-items:center; gap:8px; margin:8px 0; }
   .vj-control-row label { font-size:11px; color:#bfbfbf; width:100px; }
   .vj-toggle { background:#4caf50; border:none; color:white; padding:8px 16px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; width:100%; margin-top:8px; }
@@ -72,6 +135,46 @@
   .chord-display { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.3); padding:8px; border-radius:6px; margin:8px 0; font-size:11px; }
   .chord-name { font-weight:bold; color:#4caf50; font-size:13px; }
   .chord-notes { color:#aaa; font-size:10px; margin-top:4px; }
+
+  /* Collapsible Sections */
+  .collapsible-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    cursor:pointer;
+    user-select:none;
+    padding:4px 0;
+    margin-bottom:8px;
+  }
+  .collapsible-header:hover {
+    opacity:0.8;
+  }
+  .collapse-toggle {
+    font-size:18px;
+    color:#888;
+    transition:transform 0.2s;
+    margin-left:8px;
+  }
+  .collapsed .collapse-toggle {
+    transform:rotate(-90deg);
+  }
+  .collapsible-content {
+    overflow:hidden;
+    transition:max-height 0.3s ease, opacity 0.3s ease;
+    max-height:5000px;
+    opacity:1;
+  }
+  .collapsible-content.collapsed {
+    max-height:0;
+    opacity:0;
+    padding:0;
+    margin:0;
+  }
+  .section-header {
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
 
   /* Responsive */
   @media (max-width:900px) {
@@ -86,7 +189,7 @@
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="back" class="back-button" style="background:#222;color:#fff;border-radius:6px;padding:6px 10px;border:none;cursor:pointer">← Back</button>
     </div>
-    <div class="title">Polyphonic Synth — Full Parameter Panel</div>
+    <div class="title">Synthviz WIP</div>
     <div class="controls">
       <span class="hint">Input:</span>
       <select id="input-select" style="background:#111;color:#fff;padding:8px;border-radius:6px;">
@@ -104,15 +207,28 @@
   <div id="start-wrapper">
     <button id="start-button">Start</button>
     <div id="meta">
-      Click Start to enable audio. Play with QWERTY (Q..I row, Z..M row) or use a MIDI keyboard.  
-      This single file exposes oscillator, filter, LFO, effects, portamento, pan, polyphony, and more.
+      Click Start to enable audio. <br> Play with QWERTY (Q..I row, Z..M row) or use a MIDI keyboard.  
+      <br>This single file exposes oscillator, filter, LFO, effects, and more.
     </div>
   </div>
 
   <div id="panel">
+    <div class="collapsible-header" onclick="toggleCollapse('panel-main')" style="margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid rgba(255,255,255,0.1);">
+      <div class="section-header">
+        <h3 style="margin:0; font-size:14px; color:#fff;">Synth Controls</h3>
+        <span class="collapse-toggle">▼</span>
+      </div>
+    </div>
+    <div id="panel-main-content" class="collapsible-content">
     <!-- Presets -->
     <div class="section" style="border-bottom:2px solid rgba(255,255,255,0.1);">
-      <h3>Presets</h3>
+      <div class="collapsible-header" onclick="toggleCollapse('presets')">
+        <div class="section-header">
+          <h3 style="margin:0;">Presets</h3>
+          <span class="collapse-toggle">▼</span>
+        </div>
+      </div>
+      <div id="presets-content" class="collapsible-content">
       <div class="row">
         <label>Sound Profile</label>
         <select id="preset-select" style="flex:1;">
@@ -134,11 +250,18 @@
           <option value="glassy">Glassy</option>
         </select>
       </div>
+      </div>
     </div>
 
     <!-- OSC -->
     <div class="section">
-      <h3>Oscillator / Pitch</h3>
+      <div class="collapsible-header" onclick="toggleCollapse('oscillator')">
+        <div class="section-header">
+          <h3 style="margin:0;">Oscillator / Pitch</h3>
+          <span class="collapse-toggle">▼</span>
+        </div>
+      </div>
+      <div id="oscillator-content" class="collapsible-content">
       <div class="row">
         <label>Waveform</label>
         <select id="osc-wave">
@@ -168,11 +291,18 @@
         </select>
         <div style="width:60px;text-align:right;color:#bdbdbd" id="voice-count-label">8</div>
       </div>
+      </div>
     </div>
 
     <!-- Filter -->
     <div class="section">
-      <h3>Filter</h3>
+      <div class="collapsible-header" onclick="toggleCollapse('filter')">
+        <div class="section-header">
+          <h3 style="margin:0;">Filter</h3>
+          <span class="collapse-toggle">▼</span>
+        </div>
+      </div>
+      <div id="filter-content" class="collapsible-content">
 
       <div class="row">
         <label>Type</label>
@@ -233,11 +363,18 @@
         <input id="fenv-release" type="range" min="0.01" max="5" step="0.01" value="0.6">
         <div style="width:60px;text-align:right;color:#bdbdbd" id="fenv-r-val">0.60</div>
       </div>
+      </div>
     </div>
 
     <!-- LFO -->
     <div class="section">
-      <h3>LFO</h3>
+      <div class="collapsible-header" onclick="toggleCollapse('lfo')">
+        <div class="section-header">
+          <h3 style="margin:0;">LFO</h3>
+          <span class="collapse-toggle">▼</span>
+        </div>
+      </div>
+      <div id="lfo-content" class="collapsible-content">
 
       <div class="row">
         <label>Wave</label>
@@ -269,11 +406,18 @@
           <option value="pan">panning</option>
         </select>
       </div>
+      </div>
     </div>
 
     <!-- Effects -->
     <div class="section">
-      <h3>Effects</h3>
+      <div class="collapsible-header" onclick="toggleCollapse('effects')">
+        <div class="section-header">
+          <h3 style="margin:0;">Effects</h3>
+          <span class="collapse-toggle">▼</span>
+        </div>
+      </div>
+      <div id="effects-content" class="collapsible-content">
 
       <div class="row">
         <label>Reverb Wet</label>
@@ -304,11 +448,18 @@
         <input id="dist-amt" type="range" min="0" max="1" step="0.01" value="0">
         <div style="width:60px;text-align:right;color:#bdbdbd" id="dist-val">0</div>
       </div>
+      </div>
     </div>
 
     <!-- Global -->
     <div class="section">
-      <h3>Global</h3>
+      <div class="collapsible-header" onclick="toggleCollapse('global')">
+        <div class="section-header">
+          <h3 style="margin:0;">Global</h3>
+          <span class="collapse-toggle">▼</span>
+        </div>
+      </div>
+      <div id="global-content" class="collapsible-content">
 
       <div class="row">
         <label>Master Volume (dB)</label>
@@ -334,24 +485,37 @@
         <div style="width:60px;text-align:right;color:#bdbdbd" id="octave-val">0</div>
         <div style="font-size:11px;color:#888;margin-left:4px">(- / +)</div>
       </div>
-
+      </div>
     </div>
-
+    </div> <!-- panel-main-content -->
   </div> <!-- panel -->
 
   <div id="eq-visualizer">
-    <div class="hint"><strong>Frequency Spectrum</strong></div>
-    <canvas id="eq-canvas" width="276" height="120"></canvas>
-    <div class="eq-label">
-      <span>20Hz</span>
-      <span>200Hz</span>
-      <span>2kHz</span>
-      <span>20kHz</span>
+    <div class="collapsible-header" onclick="toggleCollapse('eq')">
+      <div class="section-header">
+        <div class="hint"><strong>Frequency Spectrum</strong></div>
+        <span class="collapse-toggle">▼</span>
+      </div>
+    </div>
+    <div id="eq-content" class="collapsible-content">
+      <canvas id="eq-canvas" width="276" height="120"></canvas>
+      <div class="eq-label">
+        <span>20Hz</span>
+        <span>200Hz</span>
+        <span>2kHz</span>
+        <span>20kHz</span>
+      </div>
     </div>
   </div>
 
   <div id="keyboard-helper" style="display:block;">
-    <div class="hint"><strong>Keyboard mapping</strong></div>
+    <div class="collapsible-header" onclick="toggleCollapse('keyboard')">
+      <div class="section-header">
+        <div class="hint"><strong>Keyboard mapping</strong></div>
+        <span class="collapse-toggle">▼</span>
+      </div>
+    </div>
+    <div id="keyboard-content" class="collapsible-content">
     
     <!-- Upper Octave Keyboard (C4-C5) -->
     <div class="keyboard-section">
@@ -502,6 +666,7 @@
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);color:#888;font-size:10px;text-align:center">
       <strong style="color:#aaa">- / +</strong> = change octave (current: <span id="octave-display" style="color:#4caf50;font-weight:bold">0</span>)
     </div>
+    </div>
   </div>
 
   <div id="active-notes"></div>
@@ -511,7 +676,13 @@
 
   <!-- VJ Controls -->
   <div id="vj-controls">
-    <div class="hint"><strong>VJ Shader System</strong></div>
+    <div class="collapsible-header" onclick="toggleCollapse('vj')">
+      <div class="section-header">
+        <div class="hint"><strong>VJ Shader System</strong></div>
+        <span class="collapse-toggle">▼</span>
+      </div>
+    </div>
+    <div id="vj-content" class="collapsible-content">
     
     <div class="chord-display">
       <div class="chord-name" id="current-chord">No Chord</div>
@@ -529,7 +700,48 @@
         <option value="particles">Particle Field</option>
         <option value="voronoi">Voronoi Cells</option>
         <option value="fluid">Fluid Dynamics</option>
+        <option value="custom">Custom Shader</option>
+        <option value="hydra">Hydra WIP</option>
       </select>
+    </div>
+
+    <div id="vj-hydra-editor" style="display:none; margin-top:12px;">
+      <div style="font-size:11px;color:#aaa;margin-bottom:6px;">Hydra Code Editor</div>
+      <textarea id="vj-hydra-code" style="width:100%; min-height:200px; background:#1a1a1a; color:#0ff; font-family:'Courier New', monospace; font-size:11px; padding:8px; border:1px solid #333; border-radius:4px; resize:vertical;">// Hydra live coding example
+// Available audio inputs: a0 (bass), a1 (mid), a2 (treble), a3 (avgAmp)
+// Chord color: h0, h1, h2 (RGB components)
+// Use as values directly (not functions)
+
+osc(20, 0.1, 1.2)
+  .rotate(() => a0 * 2)
+  .scale(() => 1 + a1 * 0.5)
+  .color(() => h0, () => h1, () => h2)
+  .out()</textarea>
+      <div class="vj-editor-controls">
+        <button class="vj-btn" id="vj-run-hydra">Run Hydra Code</button>
+        <button class="vj-btn vj-btn-secondary" id="vj-stop-hydra">Stop Hydra</button>
+        <button class="vj-btn vj-btn-secondary" id="vj-hydra-examples">Load Example</button>
+      </div>
+      <div style="font-size:10px;color:#888;margin-top:8px;">
+        <strong>Audio Inputs:</strong> a0 (bass), a1 (mid), a2 (treble), a3 (avgAmp) - use as values, not functions<br>
+        <strong>Chord Color:</strong> h0, h1, h2 (RGB), h3 (intensity) - use as values<br>
+        <strong>Time:</strong> t (time), s (speed) - use as values<br>
+        <strong>Note:</strong> Use <code>a0</code> not <code>a0()</code> in your code
+      </div>
+      <div id="hydra-error" class="shader-error"></div>
+      <div id="hydra-success" class="shader-success">Hydra code running!</div>
+    </div>
+
+    <div id="vj-shader-editor">
+      <div style="font-size:11px;color:#aaa;margin-bottom:6px;">Custom Shader Code (GLSL)</div>
+      <textarea id="vj-shader-code" placeholder="// Write your custom shader here&#10;// Available uniforms:&#10;// u_time, u_resolution, u_intensity, u_speed, u_scale&#10;// u_chordColor (vec3), u_bass, u_mid, u_treble, u_avgAmp&#10;// u_chordRoot (int), u_chordType (int)&#10;// v_uv (vec2) - UV coordinates (0-1)"></textarea>
+      <div class="vj-editor-controls">
+        <button class="vj-btn" id="vj-compile-shader">Compile & Apply</button>
+        <button class="vj-btn vj-btn-secondary" id="vj-reset-shader">Reset to Default</button>
+        <button class="vj-btn vj-btn-secondary" id="vj-load-example">Load Example</button>
+      </div>
+      <div id="shader-error" class="shader-error"></div>
+      <div id="shader-success" class="shader-success">Shader compiled successfully!</div>
     </div>
 
     <div class="vj-control-row">
@@ -567,6 +779,7 @@
     </div>
 
     <button id="vj-toggle" class="vj-toggle" disabled>Enable VJ (Start Audio First)</button>
+    </div>
   </div>
 
   <div id="stored-notes">
@@ -607,6 +820,10 @@ let vjBlendMode = 'normal';
 let vjTime = 0;
 let currentChord = null;
 let chordNotes = [];
+let customShaderCode = '';
+let hydra = null;
+let hydraCanvas = null;
+let hydraRunning = false;
 
 // Config state (keeps in sync with UI)
 const state = {
@@ -2241,30 +2458,195 @@ function initVJSystem() {
   // Create shader program
   compileShader('audio-reactive');
   
+  // Initialize Hydra (after a short delay to ensure library is loaded)
+  // Try multiple times in case library loads slowly
+  let hydraInitAttempts = 0;
+  const tryInitHydra = () => {
+    if (hydraInitAttempts < 10) {
+      hydraInitAttempts++;
+      if (!initHydra()) {
+        setTimeout(tryInitHydra, 200);
+      }
+    }
+  };
+  setTimeout(tryInitHydra, 100);
+  
   // Handle resize
   window.addEventListener('resize', () => {
     vjCanvas.width = window.innerWidth;
     vjCanvas.height = window.innerHeight;
     vjGl.viewport(0, 0, vjCanvas.width, vjCanvas.height);
+    if (hydra) {
+      hydra.setResolution(window.innerWidth, window.innerHeight);
+    }
   });
   
   // Start render loop
   vjRenderLoop();
 }
 
+// Initialize Hydra
+function initHydra() {
+  try {
+    // Don't reinitialize if already initialized
+    if (hydra) {
+      console.log('Hydra already initialized');
+      return true;
+    }
+    
+    // Check if Hydra is available - try multiple ways
+    let HydraClass = null;
+    
+    // Check global scope
+    if (typeof Hydra !== 'undefined') {
+      HydraClass = Hydra;
+    } else if (typeof window.Hydra !== 'undefined') {
+      HydraClass = window.Hydra;
+    } else if (typeof window.hydra !== 'undefined' && window.hydra.constructor) {
+      // Sometimes it's exposed as a constructor on the instance
+      HydraClass = window.hydra.constructor;
+    }
+    
+    if (!HydraClass) {
+      console.warn('Hydra library not loaded yet. Attempting to load...');
+      // Try to load it manually if CDN failed
+      if (!window.hydraLoadAttempted) {
+        window.hydraLoadAttempted = true;
+        if (typeof window.loadHydra === 'function') {
+          window.loadHydra();
+        }
+        // Also try direct script injection
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/hydra-synth@latest/dist/hydra-synth.js';
+        script.onload = () => {
+          console.log('Hydra loaded from fallback CDN, retrying init...');
+          setTimeout(initHydra, 200);
+        };
+        script.onerror = () => {
+          console.error('Failed to load Hydra from fallback CDN');
+        };
+        document.head.appendChild(script);
+      }
+      return false;
+    }
+    
+    // Ensure canvas is available
+    if (!vjCanvas) {
+      vjCanvas = document.getElementById('vj-canvas');
+      if (!vjCanvas) {
+        console.warn('VJ canvas not available for Hydra');
+        return false;
+      }
+    }
+    
+    hydraCanvas = vjCanvas; // Use the same canvas
+    
+    // Create Hydra instance
+    hydra = new HydraClass({
+      canvas: hydraCanvas,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      autoLoop: true, // Hydra manages its own loop
+      makeGlobal: true, // Make functions globally available
+      numSources: 4,
+      numOutputs: 4
+    });
+    
+    // Ensure canvas is visible
+    if (hydraCanvas) {
+      hydraCanvas.style.display = 'block';
+      hydraCanvas.style.visibility = 'visible';
+      hydraCanvas.style.pointerEvents = 'none'; // Allow clicks to pass through
+    }
+    
+    // Create audio input sources that we can update
+    hydra.a0 = { value: 0.2 };
+    hydra.a1 = { value: 0.2 };
+    hydra.a2 = { value: 0.2 };
+    hydra.a3 = { value: 0.5 };
+    hydra.h0 = { value: 0.5 };
+    hydra.h1 = { value: 0.5 };
+    hydra.h2 = { value: 0.5 };
+    hydra.h3 = { value: 1.0 };
+    hydra.t = { value: 0 };
+    hydra.s = { value: 1.0 };
+    
+    // Store reference globally for easy access
+    window.h = hydra;
+    
+    console.log('Hydra initialized successfully', hydra);
+    return true;
+  } catch (e) {
+    console.error('Failed to initialize Hydra:', e);
+    hydra = null;
+    return false;
+  }
+}
+
+// Update Hydra with audio data
+function updateHydraAudio(bass, mid, treble, avgAmp, chordColor) {
+  if (!hydra || !hydraRunning) return;
+  
+  try {
+    // Ensure values are numbers
+    const safeBass = typeof bass === 'number' ? bass : 0.2;
+    const safeMid = typeof mid === 'number' ? mid : 0.2;
+    const safeTreble = typeof treble === 'number' ? treble : 0.2;
+    const safeAvgAmp = typeof avgAmp === 'number' ? avgAmp : 0.5;
+    
+    // Update audio input values
+    if (hydra.a0) hydra.a0.value = safeBass;
+    if (hydra.a1) hydra.a1.value = safeMid;
+    if (hydra.a2) hydra.a2.value = safeTreble;
+    if (hydra.a3) hydra.a3.value = safeAvgAmp;
+    
+    // Update chord color values (ensure they're numbers)
+    if (hydra.h0) hydra.h0.value = typeof chordColor[0] === 'number' ? chordColor[0] : 0.5;
+    if (hydra.h1) hydra.h1.value = typeof chordColor[1] === 'number' ? chordColor[1] : 0.5;
+    if (hydra.h2) hydra.h2.value = typeof chordColor[2] === 'number' ? chordColor[2] : 0.5;
+    if (hydra.h3) hydra.h3.value = typeof vjIntensity === 'number' ? vjIntensity : 1.0;
+    
+    // Update time and speed
+    if (hydra.t) hydra.t.value = typeof vjTime === 'number' ? vjTime : 0;
+    if (hydra.s) hydra.s.value = typeof vjSpeed === 'number' ? vjSpeed : 1.0;
+  } catch (e) {
+    console.error('Error updating Hydra audio:', e);
+  }
+}
+
+function compileCustomShader(fragmentSource) {
+  if (!vjGl) {
+    showShaderError('WebGL not initialized');
+    return false;
+  }
+  
+  return compileShaderFromSource(fragmentSource);
+}
+
 function compileShader(shaderName) {
-  if (!vjGl) return;
+  if (!vjGl) return false;
   
   const fragmentSource = vjShaders[shaderName];
-  if (!fragmentSource) return;
+  if (!fragmentSource) {
+    showShaderError('Shader not found: ' + shaderName);
+    return false;
+  }
+  
+  return compileShaderFromSource(fragmentSource);
+}
+
+function compileShaderFromSource(fragmentSource) {
+  if (!vjGl) return false;
   
   // Compile vertex shader
   const vertexShader = vjGl.createShader(vjGl.VERTEX_SHADER);
   vjGl.shaderSource(vertexShader, vjVertexShader);
   vjGl.compileShader(vertexShader);
   if (!vjGl.getShaderParameter(vertexShader, vjGl.COMPILE_STATUS)) {
-    console.error('Vertex shader error:', vjGl.getShaderInfoLog(vertexShader));
-    return;
+    const error = vjGl.getShaderInfoLog(vertexShader);
+    console.error('Vertex shader error:', error);
+    showShaderError('Vertex shader error: ' + error);
+    return false;
   }
   
   // Compile fragment shader
@@ -2272,8 +2654,10 @@ function compileShader(shaderName) {
   vjGl.shaderSource(fragShader, fragmentSource);
   vjGl.compileShader(fragShader);
   if (!vjGl.getShaderParameter(fragShader, vjGl.COMPILE_STATUS)) {
-    console.error('Fragment shader error:', vjGl.getShaderInfoLog(fragShader));
-    return;
+    const error = vjGl.getShaderInfoLog(fragShader);
+    console.error('Fragment shader error:', error);
+    showShaderError('Fragment shader error: ' + error);
+    return false;
   }
   
   // Create program
@@ -2283,8 +2667,10 @@ function compileShader(shaderName) {
   vjGl.linkProgram(vjProgram);
   
   if (!vjGl.getProgramParameter(vjProgram, vjGl.LINK_STATUS)) {
-    console.error('Program link error:', vjGl.getProgramInfoLog(vjProgram));
-    return;
+    const error = vjGl.getProgramInfoLog(vjProgram);
+    console.error('Program link error:', error);
+    showShaderError('Program link error: ' + error);
+    return false;
   }
   
   // Get attribute and uniform locations
@@ -2320,6 +2706,236 @@ function compileShader(shaderName) {
   
   vjGl.positionLocation = positionLocation;
   vjGl.buffer = buffer;
+  
+  return true;
+}
+
+function showShaderError(message) {
+  const errorDiv = document.getElementById('shader-error');
+  const successDiv = document.getElementById('shader-success');
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+  }
+  if (successDiv) {
+    successDiv.style.display = 'none';
+  }
+}
+
+function showShaderSuccess() {
+  const errorDiv = document.getElementById('shader-error');
+  const successDiv = document.getElementById('shader-success');
+  if (errorDiv) {
+    errorDiv.style.display = 'none';
+  }
+  if (successDiv) {
+    successDiv.style.display = 'block';
+    setTimeout(() => {
+      if (successDiv) successDiv.style.display = 'none';
+    }, 2000);
+  }
+}
+
+function hideShaderMessages() {
+  const errorDiv = document.getElementById('shader-error');
+  const successDiv = document.getElementById('shader-success');
+  if (errorDiv) errorDiv.style.display = 'none';
+  if (successDiv) successDiv.style.display = 'none';
+}
+
+// Hydra functions
+function runHydraCode() {
+  // Try to initialize Hydra if not already done
+  if (!hydra) {
+    console.log('Hydra not initialized, attempting to initialize...');
+    const initialized = initHydra();
+    if (!initialized) {
+      // Wait a bit and try again
+      setTimeout(() => {
+        if (!hydra) {
+          const retryInit = initHydra();
+          if (!retryInit) {
+            showHydraError('Hydra library not loaded. Please wait a moment and try again, or refresh the page.');
+            return;
+          }
+        }
+        // Retry running the code after initialization
+        runHydraCode();
+      }, 500);
+      return;
+    }
+  }
+  
+  const code = document.getElementById('vj-hydra-code')?.value || '';
+  if (!code.trim()) {
+    showHydraError('Hydra code is empty');
+    return;
+  }
+  
+  try {
+    // Stop previous Hydra render
+    if (hydraRunning && hydra && hydra.synth) {
+      try {
+        if (typeof solid !== 'undefined') {
+          solid(0, 0, 0).out();
+        }
+      } catch (e) {}
+    }
+    
+    // Set up audio-reactive functions that Hydra can use
+    // These must be functions that return numbers (not getters)
+    // Use Number() to ensure we always return a number, not undefined
+    window.a0 = function() { 
+      const val = hydra?.a0?.value;
+      return typeof val === 'number' ? val : 0.2;
+    };
+    window.a1 = function() { 
+      const val = hydra?.a1?.value;
+      return typeof val === 'number' ? val : 0.2;
+    };
+    window.a2 = function() { 
+      const val = hydra?.a2?.value;
+      return typeof val === 'number' ? val : 0.2;
+    };
+    window.a3 = function() { 
+      const val = hydra?.a3?.value;
+      return typeof val === 'number' ? val : 0.5;
+    };
+    
+    // Chord color functions
+    window.h0 = function() { 
+      const val = hydra?.h0?.value;
+      return typeof val === 'number' ? val : 0.5;
+    };
+    window.h1 = function() { 
+      const val = hydra?.h1?.value;
+      return typeof val === 'number' ? val : 0.5;
+    };
+    window.h2 = function() { 
+      const val = hydra?.h2?.value;
+      return typeof val === 'number' ? val : 0.5;
+    };
+    window.h3 = function() { 
+      const val = hydra?.h3?.value;
+      return typeof val === 'number' ? val : 1.0;
+    };
+    
+    // Time and speed functions
+    window.t = function() { 
+      const val = hydra?.t?.value;
+      return typeof val === 'number' ? val : 0;
+    };
+    window.s = function() { 
+      const val = hydra?.s?.value;
+      return typeof val === 'number' ? val : 1.0;
+    };
+    
+    // Execute Hydra code directly (Hydra functions are now global)
+    // Wrap in try-catch to handle any errors gracefully
+    try {
+      eval(code);
+      console.log('Hydra code executed successfully');
+    } catch (e) {
+      console.error('Error executing Hydra code:', e);
+      throw e;
+    }
+    
+    hydraRunning = true;
+    showHydraSuccess();
+  } catch (e) {
+    showHydraError('Hydra error: ' + e.message);
+    console.error('Hydra execution error:', e);
+    hydraRunning = false;
+  }
+}
+
+function stopHydra() {
+  if (hydra && hydra.synth) {
+    try {
+      // Clear the output with a black solid
+      if (typeof solid !== 'undefined') {
+        solid(0, 0, 0).out();
+      }
+    } catch (e) {
+      console.error('Error stopping Hydra:', e);
+    }
+  }
+  hydraRunning = false;
+  const successDiv = document.getElementById('hydra-success');
+  if (successDiv) successDiv.style.display = 'none';
+}
+
+function loadHydraExample() {
+  const examples = [
+    `// Audio-reactive circles
+osc(20, 0.1, 1.2)
+  .rotate(() => a0() * 2)
+  .scale(() => 1 + a1() * 0.5)
+  .color(() => h0(), () => h1(), () => h2())
+  .out()`,
+    
+    `// Frequency bands visualization
+osc(10, 0, 1)
+  .modulate(noise(3).luma())
+  .color(() => a0(), () => a1(), () => a2())
+  .scale(() => 1 + a3() * 0.5)
+  .out()`,
+    
+    `// Kaleidoscope with audio
+osc(20, 0.1, 1.2)
+  .kaleid(4)
+  .rotate(() => a0() * 2)
+  .color(() => h0(), () => h1(), () => h2())
+  .scale(() => 1 + a3() * 0.3)
+  .out()`,
+    
+    `// Voronoi cells
+voronoi(10, 0.1)
+  .color(() => h0(), () => h1(), () => h2())
+  .scale(() => 1 + a0() * 0.5)
+  .rotate(() => a1() * 3.14)
+  .out()`,
+    
+    `// Plasma effect
+osc(20, 0.1, 1.2)
+  .modulate(noise(3))
+  .color(() => h0(), () => h1(), () => h2())
+  .scale(() => 1 + a3() * 0.5)
+  .rotate(() => a0() * 2)
+  .out()`
+  ];
+  
+  const randomExample = examples[Math.floor(Math.random() * examples.length)];
+  const editor = document.getElementById('vj-hydra-code');
+  if (editor) {
+    editor.value = randomExample;
+  }
+}
+
+function showHydraError(message) {
+  const errorDiv = document.getElementById('hydra-error');
+  const successDiv = document.getElementById('hydra-success');
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+  }
+  if (successDiv) {
+    successDiv.style.display = 'none';
+  }
+}
+
+function showHydraSuccess() {
+  const errorDiv = document.getElementById('hydra-error');
+  const successDiv = document.getElementById('hydra-success');
+  if (errorDiv) {
+    errorDiv.style.display = 'none';
+  }
+  if (successDiv) {
+    successDiv.style.display = 'block';
+    setTimeout(() => {
+      if (successDiv) successDiv.style.display = 'none';
+    }, 2000);
+  }
 }
 
 function vjRenderLoop() {
@@ -2330,6 +2946,15 @@ function vjRenderLoop() {
   
   // Always render when enabled (even without audio for testing)
   if (vjEnabled) {
+    // If Hydra is running, let it handle rendering
+    if (vjShaderType === 'hydra' && hydraRunning && hydra) {
+      // Hydra handles its own rendering, just update audio inputs
+      // This will be done after we calculate audio data
+    } else if (vjShaderType === 'hydra') {
+      // Hydra mode selected but not running - skip WebGL rendering
+      requestAnimationFrame(vjRenderLoop);
+      return;
+    }
     // Use analyser if available, otherwise use default values
     let freqData = null;
     if (analyser && initialized) {
@@ -2364,6 +2989,20 @@ function vjRenderLoop() {
     // Detect chord
     currentChord = detectChord(activeMidiNotes);
     const chordColor = chordToColor(currentChord);
+    
+    // Update Hydra with audio data if running
+    if (vjShaderType === 'hydra' && hydraRunning) {
+      updateHydraAudio(bass, mid, treble, avgAmp, chordColor);
+      // Hydra handles its own rendering, so skip WebGL
+      requestAnimationFrame(vjRenderLoop);
+      return;
+    }
+    
+    // Skip WebGL rendering if Hydra is active
+    if (vjShaderType === 'hydra') {
+      requestAnimationFrame(vjRenderLoop);
+      return;
+    }
     
     // Update chord display
     const chordDisplay = document.getElementById('current-chord');
@@ -2458,7 +3097,105 @@ function wireVJControls() {
   
   $('vj-shader')?.addEventListener('change', (e) => {
     vjShaderType = e.target.value;
-    compileShader(vjShaderType);
+    const editor = $('vj-shader-editor');
+    const hydraEditor = $('vj-hydra-editor');
+    
+    if (editor) {
+      editor.style.display = vjShaderType === 'custom' ? 'block' : 'none';
+    }
+    if (hydraEditor) {
+      hydraEditor.style.display = vjShaderType === 'hydra' ? 'block' : 'none';
+    }
+    
+    if (vjShaderType === 'hydra') {
+      // Stop Hydra if switching away
+      if (hydraRunning) {
+        stopHydra();
+      }
+    } else if (vjShaderType !== 'custom') {
+      compileShader(vjShaderType);
+    }
+  });
+  
+  // Custom shader editor
+  $('vj-compile-shader')?.addEventListener('click', () => {
+    const code = $('vj-shader-code')?.value || '';
+    if (!code.trim()) {
+      showShaderError('Shader code is empty');
+      return;
+    }
+    customShaderCode = code;
+    const success = compileCustomShader(code);
+    if (success) {
+      showShaderSuccess();
+    }
+  });
+  
+  $('vj-reset-shader')?.addEventListener('click', () => {
+    if ($('vj-shader-code')) {
+      $('vj-shader-code').value = '';
+      customShaderCode = '';
+    }
+    $('vj-shader').value = 'audio-reactive';
+    vjShaderType = 'audio-reactive';
+    compileShader('audio-reactive');
+    if ($('vj-shader-editor')) {
+      $('vj-shader-editor').style.display = 'none';
+    }
+    hideShaderMessages();
+  });
+  
+  // Hydra controls
+  $('vj-run-hydra')?.addEventListener('click', () => {
+    runHydraCode();
+  });
+  
+  $('vj-stop-hydra')?.addEventListener('click', () => {
+    stopHydra();
+  });
+  
+  $('vj-hydra-examples')?.addEventListener('click', () => {
+    loadHydraExample();
+  });
+  
+  $('vj-load-example')?.addEventListener('click', () => {
+    const example = `precision highp float;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform float u_intensity;
+uniform float u_speed;
+uniform float u_scale;
+uniform vec3 u_chordColor;
+uniform float u_bass;
+uniform float u_mid;
+uniform float u_treble;
+uniform float u_avgAmp;
+varying vec2 v_uv;
+
+void main() {
+  vec2 uv = (v_uv - 0.5) * 2.0 * u_scale;
+  float dist = length(uv);
+  
+  // Audio-reactive circles
+  float wave1 = sin(dist * 10.0 - u_time * u_speed * 2.0) * u_bass;
+  float wave2 = sin(dist * 15.0 - u_time * u_speed * 3.0) * u_mid;
+  float wave3 = sin(dist * 20.0 - u_time * u_speed * 4.0) * u_treble;
+  
+  float pattern = (wave1 + wave2 + wave3) * u_intensity;
+  
+  // Use chord color
+  vec3 color = u_chordColor * (0.5 + pattern * 0.5);
+  color += vec3(wave1 * 0.3, wave2 * 0.3, wave3 * 0.3);
+  
+  // Pulsing effect
+  float pulse = sin(u_time * u_speed) * 0.1 + 0.9;
+  color *= pulse * u_avgAmp;
+  
+  gl_FragColor = vec4(color, 1.0);
+}`;
+    if ($('vj-shader-code')) {
+      $('vj-shader-code').value = example;
+    }
   });
   
   $('vj-intensity')?.addEventListener('input', (e) => {
@@ -2512,6 +3249,42 @@ function wireVJControls() {
 // Don't call here to avoid duplicate event listeners
 
 // Reconnect everything when page unload or when user changes settings drastically
+// Collapsible sections functionality
+function toggleCollapse(sectionId) {
+  const content = document.getElementById(sectionId + '-content');
+  const header = content?.previousElementSibling;
+  
+  if (content && header) {
+    content.classList.toggle('collapsed');
+    header.classList.toggle('collapsed');
+    
+    // Store state in localStorage
+    localStorage.setItem('collapsed_' + sectionId, content.classList.contains('collapsed'));
+  }
+}
+
+// Restore collapsed state from localStorage
+function restoreCollapsedState() {
+  const sections = ['panel-main', 'presets', 'oscillator', 'filter', 'lfo', 'effects', 'global', 'eq', 'keyboard', 'vj'];
+  sections.forEach(sectionId => {
+    const isCollapsed = localStorage.getItem('collapsed_' + sectionId) === 'true';
+    const content = document.getElementById(sectionId + '-content');
+    const header = content?.previousElementSibling;
+    
+    if (content && header && isCollapsed) {
+      content.classList.add('collapsed');
+      header.classList.add('collapsed');
+    }
+  });
+}
+
+// Restore state on page load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', restoreCollapsedState);
+} else {
+  restoreCollapsedState();
+}
+
 window.addEventListener('beforeunload', () => {
   try { Tone.Transport.stop(); } catch (e) {}
 });
